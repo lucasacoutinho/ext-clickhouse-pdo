@@ -131,7 +131,7 @@ if(BUILD_TESTS)
     enable_testing()
 
     # Copy run-tests.php if not present
-    if(NOT EXISTS "${CMAKE_BINARY_DIR}/run-tests.php")
+    if(EXISTS "${PHP_INCLUDE_DIR}/../run-tests.php" AND NOT EXISTS "${CMAKE_BINARY_DIR}/run-tests.php")
         file(COPY ${PHP_INCLUDE_DIR}/../run-tests.php
              DESTINATION ${CMAKE_BINARY_DIR})
     endif()
@@ -156,7 +156,18 @@ if(BUILD_TESTS)
     endforeach()
 endif()
 
-file(COPY examples DESTINATION ${CMAKE_BINARY_DIR})
+# ============================================================================
+# Examples
+# ============================================================================
+
+# Copy examples if they exist
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples")
+    file(COPY examples DESTINATION ${CMAKE_BINARY_DIR})
+endif()
+
+# ============================================================================
+# Package / Distribution
+# ============================================================================
 
 set(CPACK_PACKAGE_NAME "pdo_clickhouse")
 set(CPACK_PACKAGE_VERSION ${PDO_CLICKHOUSE_VERSION})
@@ -166,14 +177,6 @@ set(CPACK_GENERATOR "TGZ")
 
 include(CPack)
 
-# Run examples
-add_custom_target(run-examples
-    COMMAND ${PHP_BINARY}
-        -d extension=${CMAKE_BINARY_DIR}/modules/pdo_clickhouse.so
-        ${CMAKE_BINARY_DIR}/examples/pdo_basic.php
-    DEPENDS pdo_clickhouse
-    COMMENT "Running PDO examples"
-)
 
 message(STATUS "")
 message(STATUS "=== PDO ClickHouse Configuration ===")
