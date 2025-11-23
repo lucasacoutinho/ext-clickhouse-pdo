@@ -1,0 +1,84 @@
+# Build artifacts
+*.lo
+*.la
+*.o
+*.so
+*.a
+.libs/
+.deps/
+modules/
+build/
+autom4te.cache/
+
+# Autotools generated files
+acinclude.m4
+aclocal.m4
+config.guess
+config.h
+config.h.in
+config.log
+config.nice
+config.status
+config.sub
+configure
+configure.ac
+install-sh
+libtool
+ltmain.sh
+missing
+mkinstalldirs
+run-tests.php
+Makefile
+Makefile.fragments
+Makefile.global
+Makefile.objects
+
+# CMake files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# Test artifacts
+*.diff
+*.exp
+*.log
+*.out
+*.php
+*.mem
+*.sh
+tests/*.diff
+tests/*.exp
+tests/*.log
+tests/*.out
+tests/*.php
+tests/*.mem
+tests/*.sh
+
+# Exclude test output but keep .phpt files
+*.phpt.diff
+*.phpt.exp
+*.phpt.log
+*.phpt.out
+*.phpt.php
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# Keep important files
+!tests/*.phpt
+!examples/*.php
+!scripts/*.sh
+!.gitignore

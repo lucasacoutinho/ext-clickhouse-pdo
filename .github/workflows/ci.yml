@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build:
+    name: PHP ${{ matrix.php }} - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-20.04]
+        php: ['8.1', '8.2', '8.3', '8.4', '8.5']
+
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:latest
+        ports:
+          - 9000:9000
+          - 8123:8123
+        options: >-
+          --health-cmd "clickhouse-client --query 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Clone ext-clickhouse
+      run: |
+        git clone https://github.com/lucasacoutinho/ext-clickhouse ../clickhouse
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ matrix.php }}
+        extensions: pdo
+        tools: php-config, phpize
+        coverage: none
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential liblz4-dev libzstd-dev libssl-dev
+
+    - name: Build extension
+      run: |
+        mkdir build && cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+        cmake --build . -j$(nproc)
+
+    - name: Run tests
+      run: |
+        cd build
+        ctest --output-on-failure -V
+      env:
+        CLICKHOUSE_HOST: localhost
+        CLICKHOUSE_PORT: 9000
+
+    - name: Install extension
+      run: |
+        cd build
+        sudo cmake --install .
+        php -m | grep pdo_clickhouse
+
+    - name: Test installed extension
+      run: |
+        php -d extension=pdo_clickhouse.so -r "new PDO('clickhouse:host=localhost;port=9000;dbname=default');"
