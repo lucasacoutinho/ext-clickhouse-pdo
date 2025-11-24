@@ -42,7 +42,7 @@ try {
     echo "Found: name=" . $row['name'] . ", value=" . $row['value'] . "\n";
 
     // Test SELECT with multiple positional parameters
-    $stmt = $pdo->prepare("SELECT * FROM pdo_test_positional_params WHERE value > ? AND score < ?");
+    $stmt = $pdo->prepare("SELECT * FROM pdo_test_positional_params WHERE value > ? AND score < ? ORDER BY id DESC");
     $stmt->execute([120, 93]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     echo "Filtered: id=" . $row['id'] . ", name=" . $row['name'] . "\n";
