@@ -71,12 +71,31 @@ jobs:
         curl -s "http://localhost:8123/?query=SELECT%20version()&user=default"
 
     - name: Run tests
+      id: run_tests
+      continue-on-error: true
       run: |
         cd build
-        ctest --output-on-failure -V || (find . -name "*.diff" -exec echo "=== {} ===" \; -exec cat {} \; && exit 1)
+        ctest --output-on-failure -V
       env:
         CLICKHOUSE_HOST: localhost
         CLICKHOUSE_PORT: 9000
+
+    - name: Show test diffs on failure
+      if: steps.run_tests.outcome == 'failure'
+      run: |
+        cd build
+        echo "=== Searching for test diff files ==="
+        find . -name "*.diff" -o -name "*.out" -o -name "*.exp" -o -name "*.log" | head -20
+        echo ""
+        echo "=== Test diff contents ==="
+        find . -name "*.diff" -exec echo "=== {} ===" \; -exec cat {} \; 2>/dev/null || echo "No .diff files found"
+        echo ""
+        echo "=== Test output files ==="
+        find . -name "*.out" -exec echo "=== {} ===" \; -exec cat {} \; 2>/dev/null | head -100 || echo "No .out files found"
+
+    - name: Fail if tests failed
+      if: steps.run_tests.outcome == 'failure'
+      run: exit 1
 
     - name: Install extension
       run: |

@@ -256,7 +256,7 @@ static bool clickhouse_handle_preparer(pdo_dbh_t *dbh, zend_string *sql,
 
     stmt->driver_data = S;
     stmt->methods = &clickhouse_stmt_methods;
-    stmt->supports_placeholders = PDO_PLACEHOLDER_POSITIONAL | PDO_PLACEHOLDER_NAMED;
+    stmt->supports_placeholders = PDO_PLACEHOLDER_NONE;
 
     return true;
 }

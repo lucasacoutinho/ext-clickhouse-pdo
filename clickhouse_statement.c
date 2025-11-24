@@ -277,14 +277,24 @@ static char *build_query_with_params(pdo_stmt_t *stmt)
                 struct pdo_bound_param_data *p = NULL;
                 int found = 0;
 
-                /* Look up parameter by name */
+                /* Look up parameter by name - try both with and without ':' prefix */
                 zend_string *key;
                 zend_ulong num_key;
                 ZEND_HASH_FOREACH_KEY_VAL(stmt->bound_params, num_key, key, param) {
-                    if (key && ZSTR_LEN(key) == name_len && memcmp(ZSTR_VAL(key), param_name, name_len) == 0) {
-                        p = (struct pdo_bound_param_data *)Z_PTR_P(param);
-                        found = 1;
-                        break;
+                    if (key) {
+                        /* Try matching without ':' prefix */
+                        if (ZSTR_LEN(key) == name_len && memcmp(ZSTR_VAL(key), param_name, name_len) == 0) {
+                            p = (struct pdo_bound_param_data *)Z_PTR_P(param);
+                            found = 1;
+                            break;
+                        }
+                        /* Try matching with ':' prefix */
+                        if (ZSTR_LEN(key) == name_len + 1 && ZSTR_VAL(key)[0] == ':' &&
+                            memcmp(ZSTR_VAL(key) + 1, param_name, name_len) == 0) {
+                            p = (struct pdo_bound_param_data *)Z_PTR_P(param);
+                            found = 1;
+                            break;
+                        }
                     }
                 } ZEND_HASH_FOREACH_END();
 

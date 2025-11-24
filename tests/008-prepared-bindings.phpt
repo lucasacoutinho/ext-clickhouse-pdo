@@ -46,7 +46,7 @@ try {
 
     // Test 3: Multiple parameters in WHERE clause
     echo "\nTest 3: Multiple WHERE conditions\n";
-    $stmt = $pdo->prepare("SELECT name FROM pdo_test_008 WHERE id >= ? AND id <= ?");
+    $stmt = $pdo->prepare("SELECT name FROM pdo_test_008 WHERE id >= ? AND id <= ? ORDER BY id");
     $stmt->execute([1, 2]);
 
     $names = [];
