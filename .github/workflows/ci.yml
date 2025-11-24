@@ -84,14 +84,23 @@ jobs:
       if: steps.run_tests.outcome == 'failure'
       run: |
         cd build
-        echo "=== Searching for test diff files ==="
-        find . -name "*.diff" -o -name "*.out" -o -name "*.exp" -o -name "*.log" | head -20
+        echo "=== Failed tests log ==="
+        cat Testing/Temporary/LastTestsFailed.log 2>/dev/null || echo "No failed tests log"
+        echo ""
+        echo "=== Searching for PHPT test output files ==="
+        find ../tests -name "*.diff" -o -name "*.out" -o -name "*.exp" -o -name "*.log" -o -name "*.sh" 2>/dev/null | head -20
         echo ""
         echo "=== Test diff contents ==="
-        find . -name "*.diff" -exec echo "=== {} ===" \; -exec cat {} \; 2>/dev/null || echo "No .diff files found"
+        find ../tests -name "*.diff" -exec echo "=== {} ===" \; -exec cat {} \; 2>/dev/null || echo "No .diff files found"
         echo ""
-        echo "=== Test output files ==="
-        find . -name "*.out" -exec echo "=== {} ===" \; -exec cat {} \; 2>/dev/null | head -100 || echo "No .out files found"
+        echo "=== Test output contents ==="
+        find ../tests -name "*.out" -exec echo "=== {} ===" \; -exec cat {} \; 2>/dev/null | head -200 || echo "No .out files found"
+        echo ""
+        echo "=== Test expected contents (first failing test) ==="
+        if [ -f Testing/Temporary/LastTestsFailed.log ]; then
+          FIRST_FAILED=$(head -1 Testing/Temporary/LastTestsFailed.log | cut -d':' -f1)
+          find ../tests -name "*$(printf '%03d' $FIRST_FAILED)*.exp" -exec cat {} \; 2>/dev/null | head -50
+        fi
 
     - name: Fail if tests failed
       if: steps.run_tests.outcome == 'failure'
