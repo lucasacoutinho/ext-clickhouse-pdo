@@ -51,19 +51,26 @@ jobs:
 
     - name: Build extension
       run: |
+        which php
+        php --version
+        which php-config
+        php-config --version
         mkdir build && cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release
         cmake --build . -j$(nproc)
 
     - name: Wait for ClickHouse to be ready
       run: |
-        timeout 60 bash -c 'until nc -z localhost 9000; do sleep 1; done'
-        sleep 2
+        echo "Waiting for ClickHouse to be ready..."
+        timeout 60 bash -c 'until nc -z localhost 9000; do sleep 1; done' || true
+        timeout 60 bash -c 'until curl -s http://localhost:8123/?query=SELECT%201 | grep -q 1; do sleep 1; done'
+        echo "ClickHouse is ready!"
+        curl -s http://localhost:8123/?query=SELECT%20version()
 
     - name: Run tests
       run: |
         cd build
-        ctest --output-on-failure -V
+        ctest --output-on-failure -V || (find . -name "*.diff" -exec echo "=== {} ===" \; -exec cat {} \; && exit 1)
       env:
         CLICKHOUSE_HOST: localhost
         CLICKHOUSE_PORT: 9000
