@@ -15,19 +15,21 @@ if test "$PHP_PDO_CLICKHOUSE" != "no"; then
   dnl Check if the clickhouse extension is available
   PHP_ADD_INCLUDE([$ext_srcdir/../clickhouse/src])
 
-  dnl Source files
+  dnl Source files - only PDO-specific files
   PHP_NEW_EXTENSION(pdo_clickhouse,
     pdo_clickhouse.c \
     clickhouse_driver.c \
     clickhouse_driver_methods.c \
     clickhouse_helpers.c \
-    clickhouse_statement.c \
-    ../clickhouse/src/buffer.c \
-    ../clickhouse/src/protocol.c \
-    ../clickhouse/src/connection.c \
-    ../clickhouse/src/column.c,
+    clickhouse_statement.c,
     $ext_shared,, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 -std=c11)
 
-  dnl Add dependency on PDO
+  dnl Add object files from clickhouse extension
+  PHP_ADD_SOURCES_X($ext_srcdir/../clickhouse/src,
+    buffer.c protocol.c connection.c column.c cityhash.c,
+    , shared_objects_pdo_clickhouse, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 -std=c11)
+
+  dnl Add dependency on PDO and clickhouse
   PHP_ADD_EXTENSION_DEP(pdo_clickhouse, pdo)
+  PHP_ADD_EXTENSION_DEP(pdo_clickhouse, clickhouse)
 fi
