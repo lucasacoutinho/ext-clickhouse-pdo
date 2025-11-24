@@ -8,12 +8,13 @@
 #include "php_ini.h"
 #include "pdo/php_pdo.h"
 #include "pdo/php_pdo_driver.h"
+#include "php_pdo_clickhouse.h"
 #include "php_pdo_clickhouse_int.h"
 #include "zend_exceptions.h"
 #include <string.h>
 
 /* Forward declarations */
-static int clickhouse_handle_closer(pdo_dbh_t *dbh);
+static void clickhouse_handle_closer(pdo_dbh_t *dbh);
 static bool clickhouse_handle_preparer(pdo_dbh_t *dbh, zend_string *sql,
                                        pdo_stmt_t *stmt, zval *driver_options);
 static zend_long clickhouse_handle_doer(pdo_dbh_t *dbh, const zend_string *sql);
@@ -25,7 +26,7 @@ static bool clickhouse_handle_rollback(pdo_dbh_t *dbh);
 static bool clickhouse_set_attribute(pdo_dbh_t *dbh, zend_long attr, zval *val);
 static int clickhouse_get_attribute(pdo_dbh_t *dbh, zend_long attr, zval *val);
 static void clickhouse_fetch_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt, zval *info);
-static bool clickhouse_check_liveness(pdo_dbh_t *dbh);
+static zend_result clickhouse_check_liveness(pdo_dbh_t *dbh);
 static bool clickhouse_in_transaction(pdo_dbh_t *dbh);
 
 /* Error handling */
@@ -124,6 +125,22 @@ static int pdo_clickhouse_handle_factory(pdo_dbh_t *dbh, zval *driver_options)
     H->max_block_size = 65536;
     H->compression = 0;
 
+    /* Initialize callbacks */
+    ZVAL_UNDEF(&H->progress_callback);
+    ZVAL_UNDEF(&H->profile_callback);
+    ZVAL_UNDEF(&H->log_callback);
+    H->has_progress_callback = 0;
+    H->has_profile_callback = 0;
+    H->has_log_callback = 0;
+
+    /* Initialize query IDs */
+    H->default_query_id = NULL;
+    H->last_query_id = NULL;
+
+    /* Initialize async query */
+    H->async_query = NULL;
+    H->has_async_query = 0;
+
     if (driver_options) {
         zval *val;
         if ((val = zend_hash_index_find(Z_ARRVAL_P(driver_options),
@@ -174,7 +191,7 @@ cleanup:
 }
 
 /* Close connection */
-static int clickhouse_handle_closer(pdo_dbh_t *dbh)
+static void clickhouse_handle_closer(pdo_dbh_t *dbh)
 {
     pdo_clickhouse_db_handle *H = (pdo_clickhouse_db_handle *)dbh->driver_data;
 
@@ -186,11 +203,39 @@ static int clickhouse_handle_closer(pdo_dbh_t *dbh)
         if (H->einfo.errmsg) {
             pefree(H->einfo.errmsg, dbh->is_persistent);
         }
+        /* Clean up query settings */
+        if (H->query_settings) {
+            for (size_t i = 0; i < H->query_settings_count; i++) {
+                pefree(H->query_settings[i].name, dbh->is_persistent);
+                pefree(H->query_settings[i].value, dbh->is_persistent);
+            }
+            pefree(H->query_settings, dbh->is_persistent);
+        }
+        /* Clean up callbacks */
+        if (H->has_progress_callback && !Z_ISUNDEF(H->progress_callback)) {
+            zval_ptr_dtor(&H->progress_callback);
+        }
+        if (H->has_profile_callback && !Z_ISUNDEF(H->profile_callback)) {
+            zval_ptr_dtor(&H->profile_callback);
+        }
+        if (H->has_log_callback && !Z_ISUNDEF(H->log_callback)) {
+            zval_ptr_dtor(&H->log_callback);
+        }
+        /* Clean up query IDs */
+        if (H->default_query_id) {
+            efree(H->default_query_id);
+        }
+        if (H->last_query_id) {
+            efree(H->last_query_id);
+        }
+        /* Clean up async query */
+        if (H->async_query) {
+            clickhouse_async_query_free(H->async_query);
+            H->async_query = NULL;
+        }
         pefree(H, dbh->is_persistent);
         dbh->driver_data = NULL;
     }
-
-    return 0;
 }
 
 /* Prepare statement */
@@ -202,6 +247,12 @@ static bool clickhouse_handle_preparer(pdo_dbh_t *dbh, zend_string *sql,
 
     S = ecalloc(1, sizeof(pdo_clickhouse_stmt));
     S->H = H;
+
+    /* Initialize statement attributes with defaults */
+    S->cursor_type = PDO_CURSOR_FWDONLY;
+    S->max_column_len = 0;  /* 0 = unlimited */
+    S->cursor_name = NULL;
+    S->cursor_open = 0;
 
     stmt->driver_data = S;
     stmt->methods = &clickhouse_stmt_methods;
@@ -270,7 +321,23 @@ static bool clickhouse_handle_begin(pdo_dbh_t *dbh)
 {
     pdo_clickhouse_db_handle *H = (pdo_clickhouse_db_handle *)dbh->driver_data;
 
-    /* ClickHouse has limited transaction support */
+    /* Execute BEGIN TRANSACTION via ClickHouse connection
+     * Note: Requires ClickHouse 21.11+ with Atomic database engine
+     * This feature is EXPERIMENTAL */
+    clickhouse_result *result = NULL;
+    int status = clickhouse_connection_execute_query(H->conn, "BEGIN TRANSACTION", &result);
+
+    if (result) {
+        clickhouse_result_free(result);
+    }
+
+    if (status != 0) {
+        const char *error = clickhouse_connection_get_error(H->conn);
+        pdo_clickhouse_error(dbh, NULL, __FILE__, __LINE__, "HY000", status,
+            error ? error : "Failed to begin transaction. Note: Transactions require ClickHouse 21.11+ with Atomic database engine. This feature is EXPERIMENTAL.");
+        return false;
+    }
+
     H->in_transaction = 1;
     return true;
 }
@@ -279,6 +346,28 @@ static bool clickhouse_handle_begin(pdo_dbh_t *dbh)
 static bool clickhouse_handle_commit(pdo_dbh_t *dbh)
 {
     pdo_clickhouse_db_handle *H = (pdo_clickhouse_db_handle *)dbh->driver_data;
+
+    if (!H->in_transaction) {
+        pdo_clickhouse_error(dbh, NULL, __FILE__, __LINE__, "HY000", 0,
+            "No active transaction to commit");
+        return false;
+    }
+
+    /* Execute COMMIT via ClickHouse connection */
+    clickhouse_result *result = NULL;
+    int status = clickhouse_connection_execute_query(H->conn, "COMMIT", &result);
+
+    if (result) {
+        clickhouse_result_free(result);
+    }
+
+    if (status != 0) {
+        const char *error = clickhouse_connection_get_error(H->conn);
+        pdo_clickhouse_error(dbh, NULL, __FILE__, __LINE__, "HY000", status,
+            error ? error : "Failed to commit transaction");
+        return false;
+    }
+
     H->in_transaction = 0;
     return true;
 }
@@ -287,8 +376,29 @@ static bool clickhouse_handle_commit(pdo_dbh_t *dbh)
 static bool clickhouse_handle_rollback(pdo_dbh_t *dbh)
 {
     pdo_clickhouse_db_handle *H = (pdo_clickhouse_db_handle *)dbh->driver_data;
+
+    if (!H->in_transaction) {
+        pdo_clickhouse_error(dbh, NULL, __FILE__, __LINE__, "HY000", 0,
+            "No active transaction to rollback");
+        return false;
+    }
+
+    /* Execute ROLLBACK via ClickHouse connection */
+    clickhouse_result *result = NULL;
+    int status = clickhouse_connection_execute_query(H->conn, "ROLLBACK", &result);
+
+    if (result) {
+        clickhouse_result_free(result);
+    }
+
+    if (status != 0) {
+        const char *error = clickhouse_connection_get_error(H->conn);
+        pdo_clickhouse_error(dbh, NULL, __FILE__, __LINE__, "HY000", status,
+            error ? error : "Failed to rollback transaction");
+        return false;
+    }
+
     H->in_transaction = 0;
-    /* ClickHouse doesn't support true rollback */
     return true;
 }
 
@@ -382,14 +492,14 @@ static void clickhouse_fetch_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt, zval *info)
 }
 
 /* Check if connection is alive */
-static bool clickhouse_check_liveness(pdo_dbh_t *dbh)
+static zend_result clickhouse_check_liveness(pdo_dbh_t *dbh)
 {
     pdo_clickhouse_db_handle *H = (pdo_clickhouse_db_handle *)dbh->driver_data;
 
     if (H->conn && clickhouse_connection_ping(H->conn) == 0) {
-        return true;
+        return SUCCESS;
     }
-    return false;
+    return FAILURE;
 }
 
 /* Check if in transaction */

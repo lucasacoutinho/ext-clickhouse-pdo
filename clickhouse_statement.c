@@ -24,6 +24,10 @@ static int clickhouse_stmt_get_col(pdo_stmt_t *stmt, int colno, zval *result,
 static int clickhouse_stmt_param_hook(pdo_stmt_t *stmt, struct pdo_bound_param_data *param,
                                       enum pdo_param_event event_type);
 static int clickhouse_stmt_col_meta(pdo_stmt_t *stmt, zend_long colno, zval *return_value);
+static int clickhouse_stmt_set_attr(pdo_stmt_t *stmt, zend_long attr, zval *val);
+static int clickhouse_stmt_get_attr(pdo_stmt_t *stmt, zend_long attr, zval *val);
+static int clickhouse_stmt_next_rowset(pdo_stmt_t *stmt);
+static int clickhouse_stmt_cursor_closer(pdo_stmt_t *stmt);
 
 /* Helper: Get current block from result */
 static clickhouse_block *get_current_block(pdo_clickhouse_stmt *S)
@@ -35,7 +39,7 @@ static clickhouse_block *get_current_block(pdo_clickhouse_stmt *S)
 }
 
 /* Helper: Convert ClickHouse value to zval */
-static void column_to_zval(clickhouse_column *col, size_t row, zval *zv)
+void pdo_clickhouse_column_to_zval(clickhouse_column *col, size_t row, zval *zv)
 {
     clickhouse_type_info *type = col->type;
 
@@ -190,6 +194,9 @@ static int clickhouse_stmt_dtor(pdo_stmt_t *stmt)
         if (S->einfo.errmsg) {
             efree(S->einfo.errmsg);
         }
+        if (S->cursor_name) {
+            efree(S->cursor_name);
+        }
         efree(S);
         stmt->driver_data = NULL;
     }
@@ -197,14 +204,53 @@ static int clickhouse_stmt_dtor(pdo_stmt_t *stmt)
     return 1;
 }
 
-/* Build query with parameters substituted */
+/* Helper: Format parameter value for SQL */
+static void format_param_value(smart_str *result, zval *value)
+{
+    switch (Z_TYPE_P(value)) {
+        case IS_NULL:
+            smart_str_appends(result, "NULL");
+            break;
+        case IS_LONG:
+            smart_str_append_long(result, Z_LVAL_P(value));
+            break;
+        case IS_DOUBLE: {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "%g", Z_DVAL_P(value));
+            smart_str_appends(result, buf);
+            break;
+        }
+        case IS_TRUE:
+            smart_str_appends(result, "1");
+            break;
+        case IS_FALSE:
+            smart_str_appends(result, "0");
+            break;
+        default: {
+            zend_string *str = zval_get_string(value);
+            smart_str_appendc(result, '\'');
+            /* Escape string */
+            for (size_t j = 0; j < ZSTR_LEN(str); j++) {
+                char c = ZSTR_VAL(str)[j];
+                if (c == '\'' || c == '\\') {
+                    smart_str_appendc(result, '\\');
+                }
+                smart_str_appendc(result, c);
+            }
+            smart_str_appendc(result, '\'');
+            zend_string_release(str);
+            break;
+        }
+    }
+}
+
+/* Build query with parameters substituted - supports both ? and :named */
 static char *build_query_with_params(pdo_stmt_t *stmt)
 {
     if (!stmt->bound_params || zend_hash_num_elements(stmt->bound_params) == 0) {
         return estrdup(ZSTR_VAL(stmt->query_string));
     }
 
-    /* Simple parameter substitution */
     smart_str result = {0};
     const char *sql = ZSTR_VAL(stmt->query_string);
     size_t sql_len = ZSTR_LEN(stmt->query_string);
@@ -212,8 +258,54 @@ static char *build_query_with_params(pdo_stmt_t *stmt)
     size_t param_idx = 0;
 
     while (i < sql_len) {
+        /* Handle :named parameters (PDO-style) */
+        if (sql[i] == ':' && (i == 0 || !isalnum(sql[i-1]))) {
+            const char *name_start = &sql[i + 1];
+            const char *name_end = name_start;
+
+            /* Extract parameter name (alphanumeric + underscore) */
+            while (*name_end && (isalnum(*name_end) || *name_end == '_')) {
+                name_end++;
+            }
+
+            size_t name_len = name_end - name_start;
+
+            if (name_len > 0) {
+                /* Found a named parameter */
+                char *param_name = estrndup(name_start, name_len);
+                zval *param = NULL;
+                struct pdo_bound_param_data *p = NULL;
+                int found = 0;
+
+                /* Look up parameter by name */
+                zend_string *key;
+                zend_ulong num_key;
+                ZEND_HASH_FOREACH_KEY_VAL(stmt->bound_params, num_key, key, param) {
+                    if (key && ZSTR_LEN(key) == name_len && memcmp(ZSTR_VAL(key), param_name, name_len) == 0) {
+                        p = (struct pdo_bound_param_data *)Z_PTR_P(param);
+                        found = 1;
+                        break;
+                    }
+                } ZEND_HASH_FOREACH_END();
+
+                if (found && p) {
+                    /* Substitute the parameter value directly */
+                    zval *value = &p->parameter;
+                    format_param_value(&result, value);
+                } else {
+                    /* Parameter not bound - leave as-is */
+                    smart_str_appendc(&result, ':');
+                    smart_str_appendl(&result, param_name, name_len);
+                }
+
+                efree(param_name);
+                i += name_len + 1;  /* Skip ':' and parameter name */
+                continue;
+            }
+        }
+
+        /* Handle ? positional parameters */
         if (sql[i] == '?') {
-            /* Positional parameter */
             zval *param;
             zend_string *key = NULL;
             zend_ulong num_key;
@@ -222,41 +314,7 @@ static char *build_query_with_params(pdo_stmt_t *stmt)
                 struct pdo_bound_param_data *p = (struct pdo_bound_param_data *)Z_PTR_P(param);
                 if (!key && num_key == param_idx) {
                     zval *value = &p->parameter;
-                    switch (Z_TYPE_P(value)) {
-                        case IS_NULL:
-                            smart_str_appends(&result, "NULL");
-                            break;
-                        case IS_LONG:
-                            smart_str_append_long(&result, Z_LVAL_P(value));
-                            break;
-                        case IS_DOUBLE: {
-                            char buf[64];
-                            snprintf(buf, sizeof(buf), "%g", Z_DVAL_P(value));
-                            smart_str_appends(&result, buf);
-                            break;
-                        }
-                        case IS_TRUE:
-                            smart_str_appends(&result, "1");
-                            break;
-                        case IS_FALSE:
-                            smart_str_appends(&result, "0");
-                            break;
-                        default: {
-                            zend_string *str = zval_get_string(value);
-                            smart_str_appendc(&result, '\'');
-                            /* Escape string */
-                            for (size_t j = 0; j < ZSTR_LEN(str); j++) {
-                                char c = ZSTR_VAL(str)[j];
-                                if (c == '\'' || c == '\\') {
-                                    smart_str_appendc(&result, '\\');
-                                }
-                                smart_str_appendc(&result, c);
-                            }
-                            smart_str_appendc(&result, '\'');
-                            zend_string_release(str);
-                            break;
-                        }
-                    }
+                    format_param_value(&result, value);
                     break;
                 }
             } ZEND_HASH_FOREACH_END();
@@ -291,8 +349,24 @@ static int clickhouse_stmt_execute(pdo_stmt_t *stmt)
     /* Build query with parameters */
     char *query = build_query_with_params(stmt);
 
-    /* Execute query */
-    int status = clickhouse_connection_execute_query(S->H->conn, query, &S->result);
+    /* Execute query with callbacks if set */
+    int status;
+    if (S->H->has_progress_callback || S->H->has_profile_callback) {
+        clickhouse_query_options *opts = clickhouse_query_options_create();
+        if (opts) {
+            /* Set progress callback if present */
+            if (S->H->has_progress_callback) {
+                opts->progress_callback = php_progress_callback_bridge;
+                opts->progress_user_data = S->H;
+            }
+            status = clickhouse_connection_execute_query_ext(S->H->conn, query, opts, &S->result);
+            clickhouse_query_options_free(opts);
+        } else {
+            status = clickhouse_connection_execute_query(S->H->conn, query, &S->result);
+        }
+    } else {
+        status = clickhouse_connection_execute_query(S->H->conn, query, &S->result);
+    }
     efree(query);
 
     if (status != 0) {
@@ -300,6 +374,11 @@ static int clickhouse_stmt_execute(pdo_stmt_t *stmt)
         pdo_clickhouse_error(stmt->dbh, stmt, __FILE__, __LINE__,
             "HY000", 1, err ? err : "Query execution failed");
         return 0;
+    }
+
+    /* Call profile callback if set and result has profile info */
+    if (S->H->has_profile_callback && S->result) {
+        php_profile_callback_bridge(&S->result->profile, S->H);
     }
 
     /* Setup column info from result */
@@ -333,6 +412,9 @@ static int clickhouse_stmt_execute(pdo_stmt_t *stmt)
         S->column_count = 0;
         stmt->column_count = 0;
     }
+
+    /* Mark cursor as open after successful execution */
+    S->cursor_open = 1;
 
     return 1;
 }
@@ -409,7 +491,7 @@ static int clickhouse_stmt_get_col(pdo_stmt_t *stmt, int colno, zval *result,
     }
 
     clickhouse_column *col = block->columns[colno];
-    column_to_zval(col, row, result);
+    pdo_clickhouse_column_to_zval(col, row, result);
 
     return 1;
 }
@@ -463,6 +545,107 @@ static int clickhouse_stmt_col_meta(pdo_stmt_t *stmt, zend_long colno, zval *ret
     return SUCCESS;
 }
 
+/* Set statement attribute */
+static int clickhouse_stmt_set_attr(pdo_stmt_t *stmt, zend_long attr, zval *val)
+{
+    pdo_clickhouse_stmt *S = (pdo_clickhouse_stmt *)stmt->driver_data;
+
+    switch (attr) {
+        case PDO_ATTR_CURSOR:
+            S->cursor_type = zval_get_long(val);
+            return 1;
+
+        case PDO_ATTR_CURSOR_NAME:
+            convert_to_string(val);
+            if (S->cursor_name) {
+                efree(S->cursor_name);
+            }
+            S->cursor_name = estrdup(Z_STRVAL_P(val));
+            return 1;
+
+        case PDO_ATTR_MAX_COLUMN_LEN:
+            S->max_column_len = zval_get_long(val);
+            return 1;
+
+        default:
+            return 0;
+    }
+}
+
+/* Get statement attribute */
+static int clickhouse_stmt_get_attr(pdo_stmt_t *stmt, zend_long attr, zval *val)
+{
+    pdo_clickhouse_stmt *S = (pdo_clickhouse_stmt *)stmt->driver_data;
+
+    switch (attr) {
+        case PDO_ATTR_CURSOR:
+            ZVAL_LONG(val, S->cursor_type);
+            return 1;
+
+        case PDO_ATTR_CURSOR_NAME:
+            if (S->cursor_name) {
+                ZVAL_STRING(val, S->cursor_name);
+            } else {
+                ZVAL_NULL(val);
+            }
+            return 1;
+
+        case PDO_ATTR_MAX_COLUMN_LEN:
+            ZVAL_LONG(val, S->max_column_len);
+            return 1;
+
+        default:
+            return 0;
+    }
+}
+
+/* Move to next result set */
+static int clickhouse_stmt_next_rowset(pdo_stmt_t *stmt)
+{
+    pdo_clickhouse_stmt *S = (pdo_clickhouse_stmt *)stmt->driver_data;
+
+    /* ClickHouse doesn't support multiple result sets in the traditional sense
+     * However, we can check if there are more blocks to process */
+    if (!S->result || S->done) {
+        return 0;
+    }
+
+    /* Move to next block if available */
+    S->current_block++;
+    S->current_row = 0;
+
+    if (S->current_block >= S->result->block_count) {
+        S->done = 1;
+        return 0;
+    }
+
+    return 1;
+}
+
+/* Close cursor */
+static int clickhouse_stmt_cursor_closer(pdo_stmt_t *stmt)
+{
+    pdo_clickhouse_stmt *S = (pdo_clickhouse_stmt *)stmt->driver_data;
+
+    if (!S->cursor_open) {
+        return 1;
+    }
+
+    /* Reset to initial state */
+    S->current_block = 0;
+    S->current_row = 0;
+    S->done = 0;
+    S->cursor_open = 0;
+
+    /* Free result if present */
+    if (S->result) {
+        clickhouse_result_free(S->result);
+        S->result = NULL;
+    }
+
+    return 1;
+}
+
 /* Statement methods structure */
 const struct pdo_stmt_methods clickhouse_stmt_methods = {
     clickhouse_stmt_dtor,
@@ -471,9 +654,9 @@ const struct pdo_stmt_methods clickhouse_stmt_methods = {
     clickhouse_stmt_describe,
     clickhouse_stmt_get_col,
     clickhouse_stmt_param_hook,
-    NULL, /* set_attr */
-    NULL, /* get_attr */
+    clickhouse_stmt_set_attr,
+    clickhouse_stmt_get_attr,
     clickhouse_stmt_col_meta,
-    NULL, /* next_rowset */
-    NULL  /* cursor_closer */
+    clickhouse_stmt_next_rowset,
+    clickhouse_stmt_cursor_closer
 };

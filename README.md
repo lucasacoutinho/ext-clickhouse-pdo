@@ -1,24 +1,8 @@
-# PDO ClickHouse
+# PDO ClickHouse Driver
 
-Native PDO driver for ClickHouse using the TCP protocol (port 9000).
+A PDO driver for ClickHouse using the native TCP protocol.
 
-## Requirements
-
-- PHP 8.3+
-- ClickHouse server
-- CMake 3.15+
-- [ext-clickhouse](https://github.com/lucasacoutinho/ext-clickhouse) - Base extension
-- Optional: liblz4-dev, libzstd-dev, libssl-dev
-
-## Build
-
-First, clone the base extension:
-
-```bash
-git clone https://github.com/lucasacoutinho/ext-clickhouse ../clickhouse
-```
-
-Then build:
+## Installation
 
 ```bash
 mkdir build && cd build
@@ -27,44 +11,65 @@ cmake --build .
 sudo cmake --install .
 ```
 
-## Configure
-
-Add to `php.ini`:
-
+Enable the extension in `php.ini`:
 ```ini
 extension=pdo_clickhouse.so
 ```
 
+## Requirements
+
+- PHP 8.3+
+- ClickHouse native extension (ext/clickhouse)
+- ClickHouse server
+- CMake 3.15+
+- LZ4 library (optional)
+- ZSTD library (optional)
+- OpenSSL (optional)
+
 ## Usage
 
 ```php
-// Connect
-$pdo = new PDO('clickhouse:host=localhost;port=9000;dbname=default', 'default', '');
+$pdo = new PDO('clickhouse:host=localhost;port=9000;dbname=default');
 
-// Query
-$result = $pdo->query("SELECT * FROM users");
-$users = $result->fetchAll(PDO::FETCH_ASSOC);
+// Standard PDO
+$stmt = $pdo->query('SELECT version()');
+$row = $stmt->fetch(PDO::FETCH_ASSOC);
 
-// Driver-specific methods
-$info = $pdo->clickhouseGetServerInfo();
-$pdo->clickhouseInsert('events', ['id', 'name'], $data);
+// Prepared statements
+$stmt = $pdo->prepare('SELECT * FROM users WHERE id = ?');
+$stmt->execute([123]);
+
+// Transactions (experimental)
+$pdo->beginTransaction();
+$pdo->exec("INSERT INTO users VALUES (1, 'Alice')");
+$pdo->commit();
+
+// Bulk insert (ClickHouse-specific)
+$pdo->clickhouseInsert('users', ['id', 'name'], [
+    [1, 'Alice'],
+    [2, 'Bob']
+]);
+
+// Insert from file (ClickHouse-specific)
+$pdo->clickhouseInsertFromFile('users', '/path/to/data.csv', 'CSV');
 ```
 
-## DSN Format
+## ClickHouse-Specific Methods
 
-```
-clickhouse:host=<host>;port=<port>;dbname=<database>
-```
-
-Default: `clickhouse:host=localhost;port=9000;dbname=default`
+- `clickhouseInsert($table, $columns, $rows)` - Bulk insert
+- `clickhouseInsertFromString($table, $data, $format)` - Insert from string
+- `clickhouseInsertFromFile($table, $path, $format)` - Insert from file
+- `clickhouseGetDatabases()` - List databases
+- `clickhouseGetTables($database)` - List tables
+- `clickhouseDescribeTable($table)` - Get table schema
 
 ## Testing
 
 ```bash
 cd build
-ctest -V
+ctest
 ```
 
 ## License
 
-MIT - Copyright (c) 2025 Lucas Coutinho
+MIT License

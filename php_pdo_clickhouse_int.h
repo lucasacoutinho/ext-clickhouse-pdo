@@ -59,8 +59,18 @@ typedef struct {
     /* Callbacks */
     zval progress_callback;
     zval profile_callback;
+    zval log_callback;
     unsigned int has_progress_callback:1;
     unsigned int has_profile_callback:1;
+    unsigned int has_log_callback:1;
+
+    /* Query IDs */
+    char *default_query_id;
+    char *last_query_id;
+
+    /* Async query support */
+    clickhouse_async_query *async_query;
+    unsigned int has_async_query:1;
 
     /* Error info */
     pdo_clickhouse_error_info einfo;
@@ -89,8 +99,14 @@ typedef struct {
     /* Error info */
     pdo_clickhouse_error_info einfo;
 
+    /* Statement attributes */
+    zend_long cursor_type;        /* PDO::CURSOR_FWDONLY or PDO::CURSOR_SCROLL */
+    zend_long max_column_len;     /* Maximum column length */
+    char *cursor_name;            /* Cursor name (if any) */
+
     /* State flags */
     unsigned int done:1;
+    unsigned int cursor_open:1;   /* Whether cursor is open */
 } pdo_clickhouse_stmt;
 
 /* Driver methods */
@@ -113,5 +129,10 @@ pdo_stmt_t *pdo_clickhouse_create_statement(pdo_dbh_t *dbh);
 /* Helper functions */
 clickhouse_block *build_block_from_php_arrays(zval *columns_array, zval *rows_array);
 void free_php_built_block(clickhouse_block *block);
+void pdo_clickhouse_column_to_zval(clickhouse_column *col, size_t row, zval *zv);
+
+/* Callback bridge functions */
+void php_progress_callback_bridge(clickhouse_progress *progress, void *user_data);
+void php_profile_callback_bridge(clickhouse_profile_info *profile, void *user_data);
 
 #endif /* PHP_PDO_CLICKHOUSE_INT_H */

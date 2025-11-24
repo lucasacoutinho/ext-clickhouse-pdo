@@ -80,6 +80,12 @@ target_include_directories(pdo_clickhouse PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+# Define necessary compilation flags for PHP module
+target_compile_definitions(pdo_clickhouse PRIVATE
+    COMPILE_DL_PDO_CLICKHOUSE=1
+    ZEND_ENABLE_STATIC_TSRMLS_CACHE=1
+)
+
 # Compression support (optional)
 find_package(PkgConfig)
 if(PkgConfig_FOUND)
@@ -130,10 +136,48 @@ install(TARGETS pdo_clickhouse
 if(BUILD_TESTS)
     enable_testing()
 
-    # Copy run-tests.php if not present
-    if(EXISTS "${PHP_INCLUDE_DIR}/../run-tests.php" AND NOT EXISTS "${CMAKE_BINARY_DIR}/run-tests.php")
-        file(COPY ${PHP_INCLUDE_DIR}/../run-tests.php
-             DESTINATION ${CMAKE_BINARY_DIR})
+    # Get run-tests.php from PHP source
+    if(NOT EXISTS "${CMAKE_BINARY_DIR}/run-tests.php")
+        # Try to find it in common locations
+        set(RUN_TESTS_CANDIDATES
+            "${PHP_INCLUDE_DIR}/../run-tests.php"
+            "/usr/share/php/run-tests.php"
+            "/usr/local/share/php/run-tests.php"
+        )
+
+        set(RUN_TESTS_FOUND FALSE)
+        foreach(CANDIDATE ${RUN_TESTS_CANDIDATES})
+            if(EXISTS "${CANDIDATE}")
+                file(COPY ${CANDIDATE} DESTINATION ${CMAKE_BINARY_DIR})
+                set(RUN_TESTS_FOUND TRUE)
+                message(STATUS "Found run-tests.php at: ${CANDIDATE}")
+                break()
+            endif()
+        endforeach()
+
+        # If not found locally, download from PHP source
+        if(NOT RUN_TESTS_FOUND)
+            message(STATUS "Downloading run-tests.php from PHP source...")
+            execute_process(COMMAND ${PHP_CONFIG} --version OUTPUT_VARIABLE PHP_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+            string(REGEX REPLACE "^([0-9]+\\.[0-9]+).*" "\\1" PHP_MAJOR_MINOR "${PHP_VERSION}")
+
+            file(DOWNLOAD
+                "https://raw.githubusercontent.com/php/php-src/PHP-${PHP_MAJOR_MINOR}/run-tests.php"
+                "${CMAKE_BINARY_DIR}/run-tests.php"
+                STATUS DOWNLOAD_STATUS
+                TIMEOUT 30
+            )
+
+            list(GET DOWNLOAD_STATUS 0 DOWNLOAD_CODE)
+            if(NOT DOWNLOAD_CODE EQUAL 0)
+                message(WARNING "Could not download run-tests.php, trying master branch...")
+                file(DOWNLOAD
+                    "https://raw.githubusercontent.com/php/php-src/master/run-tests.php"
+                    "${CMAKE_BINARY_DIR}/run-tests.php"
+                    TIMEOUT 30
+                )
+            endif()
+        endif()
     endif()
 
     # Find all test files
@@ -144,9 +188,8 @@ if(BUILD_TESTS)
         add_test(
             NAME ${TEST_NAME}
             COMMAND ${PHP_BINARY}
-                run-tests.php
+                ${CMAKE_BINARY_DIR}/run-tests.php
                 -d extension=${CMAKE_BINARY_DIR}/modules/pdo_clickhouse.so
-                -d extension_dir=${CMAKE_BINARY_DIR}/modules
                 ${PHPT_TEST}
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         )
