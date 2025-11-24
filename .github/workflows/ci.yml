@@ -55,6 +55,11 @@ jobs:
         cmake .. -DCMAKE_BUILD_TYPE=Release
         cmake --build . -j$(nproc)
 
+    - name: Wait for ClickHouse to be ready
+      run: |
+        timeout 60 bash -c 'until nc -z localhost 9000; do sleep 1; done'
+        sleep 2
+
     - name: Run tests
       run: |
         cd build
