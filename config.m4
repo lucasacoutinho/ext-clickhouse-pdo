@@ -25,8 +25,7 @@ if test "$PHP_PDO_CLICKHOUSE" != "no"; then
     ../clickhouse/src/buffer.c \
     ../clickhouse/src/protocol.c \
     ../clickhouse/src/connection.c \
-    ../clickhouse/src/column.c \
-    ../clickhouse/src/cityhash.c,
+    ../clickhouse/src/column.c,
     $ext_shared,, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 -std=c11)
 
   dnl Add dependency on PDO
