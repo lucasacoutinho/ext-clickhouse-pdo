@@ -110,7 +110,8 @@ jobs:
       run: |
         cd build
         sudo cmake --install .
-        php -m | grep pdo_clickhouse
+        echo "Installed to: $(php-config --extension-dir)/pdo_clickhouse.so"
+        ls -la $(php-config --extension-dir)/pdo_clickhouse.so
 
     - name: Test installed extension
       run: |

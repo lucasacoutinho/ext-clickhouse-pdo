@@ -36,15 +36,36 @@ zend_module_entry pdo_clickhouse_module_entry = {
 ZEND_GET_MODULE(pdo_clickhouse)
 #endif
 
+/* Define macro for registering ClickHouse-specific constants with PHP version compatibility */
+#if PHP_VERSION_ID >= 80500
+    /* PHP 8.5+: Use the new deprecated alias macro for backward compatibility */
+    #define REGISTER_PDO_CLICKHOUSE_CLASS_CONST_LONG(base_name, value) \
+        REGISTER_PDO_CLASS_CONST_LONG_DEPRECATED_ALIAS_85(base_name, "CLICKHOUSE_", \
+        "Pdo\\Clickhouse::", value)
+#else
+    /* PHP < 8.5: Use the old macro */
+    #define REGISTER_PDO_CLICKHOUSE_CLASS_CONST_LONG(name, value) \
+        REGISTER_PDO_CLASS_CONST_LONG(name, value)
+#endif
+
 PHP_MINIT_FUNCTION(pdo_clickhouse)
 {
     /* Register ClickHouse-specific PDO constants */
-    REGISTER_PDO_CLASS_CONST_LONG("CLICKHOUSE_ATTR_COMPRESSION",
+#if PHP_VERSION_ID >= 80500
+    REGISTER_PDO_CLICKHOUSE_CLASS_CONST_LONG("ATTR_COMPRESSION",
         PDO_CLICKHOUSE_ATTR_COMPRESSION);
-    REGISTER_PDO_CLASS_CONST_LONG("CLICKHOUSE_ATTR_TIMEOUT",
+    REGISTER_PDO_CLICKHOUSE_CLASS_CONST_LONG("ATTR_TIMEOUT",
         PDO_CLICKHOUSE_ATTR_TIMEOUT);
-    REGISTER_PDO_CLASS_CONST_LONG("CLICKHOUSE_ATTR_MAX_BLOCK_SIZE",
+    REGISTER_PDO_CLICKHOUSE_CLASS_CONST_LONG("ATTR_MAX_BLOCK_SIZE",
         PDO_CLICKHOUSE_ATTR_MAX_BLOCK_SIZE);
+#else
+    REGISTER_PDO_CLICKHOUSE_CLASS_CONST_LONG("CLICKHOUSE_ATTR_COMPRESSION",
+        PDO_CLICKHOUSE_ATTR_COMPRESSION);
+    REGISTER_PDO_CLICKHOUSE_CLASS_CONST_LONG("CLICKHOUSE_ATTR_TIMEOUT",
+        PDO_CLICKHOUSE_ATTR_TIMEOUT);
+    REGISTER_PDO_CLICKHOUSE_CLASS_CONST_LONG("CLICKHOUSE_ATTR_MAX_BLOCK_SIZE",
+        PDO_CLICKHOUSE_ATTR_MAX_BLOCK_SIZE);
+#endif
 
     /* Register the driver */
     php_pdo_register_driver(&pdo_clickhouse_driver);
