@@ -6,11 +6,23 @@ if (!extension_loaded('pdo_clickhouse')) die('skip PDO ClickHouse extension not 
 ?>
 --FILE--
 <?php
+error_reporting(E_ALL & ~E_DEPRECATED);
 $host = getenv('CLICKHOUSE_HOST') ?: 'localhost';
 $port = getenv('CLICKHOUSE_PORT') ?: '9000';
 
+
+$class = class_exists('Pdo\\Clickhouse') ? 'Pdo\Clickhouse' : 'PDO';
+
+function ch_call($pdo, string $name, ...$args) {
+    if (method_exists($pdo, $name)) {
+        return $pdo->$name(...$args);
+    }
+    $legacy = 'clickhouse' . ucfirst($name);
+    return $pdo->$legacy(...$args);
+}
+
 try {
-    $pdo = new PDO("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
+    $pdo = new $class("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     $pdo->exec("DROP TABLE IF EXISTS pdo_test_007");
@@ -30,7 +42,7 @@ try {
 
     // Set up progress callback
     $progress_called = false;
-    $pdo->clickhouseSetProgressCallback(function($rows, $bytes, $total_rows, $written_rows, $written_bytes) use (&$progress_called) {
+    ch_call($pdo, 'setProgressCallback', function($rows, $bytes, $total_rows, $written_rows, $written_bytes) use (&$progress_called) {
         $progress_called = true;
         echo "Progress: rows=$rows, bytes=$bytes\n";
     });
@@ -38,7 +50,7 @@ try {
 
     // Set up profile callback
     $profile_called = false;
-    $pdo->clickhouseSetProfileCallback(function($rows, $blocks, $bytes, $applied_limit, $rows_before_limit, $calculated_rows_before_limit) use (&$profile_called) {
+    ch_call($pdo, 'setProfileCallback', function($rows, $blocks, $bytes, $applied_limit, $rows_before_limit, $calculated_rows_before_limit) use (&$profile_called) {
         $profile_called = true;
         echo "Profile: rows=$rows, blocks=$blocks, bytes=$bytes\n";
     });
@@ -57,8 +69,8 @@ try {
     }
 
     // Clear callbacks
-    $pdo->clickhouseSetProgressCallback(null);
-    $pdo->clickhouseSetProfileCallback(null);
+    ch_call($pdo, 'setProgressCallback', null);
+    ch_call($pdo, 'setProfileCallback', null);
     echo "Callbacks cleared\n";
 
     // Query without callbacks should not trigger them

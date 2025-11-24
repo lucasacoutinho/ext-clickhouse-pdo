@@ -1,16 +1,28 @@
 --TEST--
-PDO ClickHouse: clickhouseDescribeTable() method
+PDO ClickHouse: describeTable() method
 --SKIPIF--
 <?php
 if (!extension_loaded('pdo_clickhouse')) die('skip PDO ClickHouse extension not loaded');
 ?>
 --FILE--
 <?php
+error_reporting(E_ALL & ~E_DEPRECATED);
 $host = getenv('CLICKHOUSE_HOST') ?: 'localhost';
 $port = getenv('CLICKHOUSE_PORT') ?: '9000';
 
+
+$class = class_exists('Pdo\\Clickhouse') ? 'Pdo\Clickhouse' : 'PDO';
+
+function ch_call($pdo, string $name, ...$args) {
+    if (method_exists($pdo, $name)) {
+        return $pdo->$name(...$args);
+    }
+    $legacy = 'clickhouse' . ucfirst($name);
+    return $pdo->$legacy(...$args);
+}
+
 try {
-    $pdo = new PDO("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
+    $pdo = new $class("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     // Create test table
@@ -24,7 +36,7 @@ try {
         ORDER BY id
     ");
 
-    $schema = $pdo->clickhouseDescribeTable('pdo_test_103');
+    $schema = ch_call($pdo, 'describeTable', 'pdo_test_103');
 
     echo "Schema is array: " . (is_array($schema) ? "YES" : "NO") . "\n";
     echo "Column count: " . count($schema) . "\n";

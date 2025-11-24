@@ -18,6 +18,10 @@
 #include "php_pdo_clickhouse.h"
 #include "php_pdo_clickhouse_int.h"
 
+#if PHP_VERSION_ID >= 80500
+zend_class_entry *pdo_clickhouse_ce;
+#endif
+
 /* Module entry */
 zend_module_entry pdo_clickhouse_module_entry = {
     STANDARD_MODULE_HEADER,
@@ -50,6 +54,10 @@ ZEND_GET_MODULE(pdo_clickhouse)
 
 PHP_MINIT_FUNCTION(pdo_clickhouse)
 {
+#if PHP_VERSION_ID >= 80500
+    zend_class_entry ce;
+#endif
+
     /* Register ClickHouse-specific PDO constants */
 #if PHP_VERSION_ID >= 80500
     REGISTER_PDO_CLICKHOUSE_CLASS_CONST_LONG("ATTR_COMPRESSION",
@@ -67,10 +75,23 @@ PHP_MINIT_FUNCTION(pdo_clickhouse)
         PDO_CLICKHOUSE_ATTR_MAX_BLOCK_SIZE);
 #endif
 
-    /* Register the driver */
-    php_pdo_register_driver(&pdo_clickhouse_driver);
+#if PHP_VERSION_ID >= 80500
+    /* Register the driver-specific PDO subclass */
+    INIT_NS_CLASS_ENTRY(ce, "Pdo", "Clickhouse", pdo_clickhouse_class_methods);
+    pdo_clickhouse_ce = zend_register_internal_class_ex(&ce, php_pdo_get_dbh_ce());
+    pdo_clickhouse_ce->create_object = pdo_dbh_new;
+#endif
 
+    /* Register the driver */
+    if (php_pdo_register_driver(&pdo_clickhouse_driver) == FAILURE) {
+        return FAILURE;
+    }
+
+#if PHP_VERSION_ID >= 80500
+    return php_pdo_register_driver_specific_ce(&pdo_clickhouse_driver, pdo_clickhouse_ce);
+#else
     return SUCCESS;
+#endif
 }
 
 PHP_MSHUTDOWN_FUNCTION(pdo_clickhouse)

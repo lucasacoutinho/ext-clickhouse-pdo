@@ -113,6 +113,10 @@ typedef struct {
 extern const pdo_driver_t pdo_clickhouse_driver;
 extern const struct pdo_dbh_methods clickhouse_methods;
 extern const struct pdo_stmt_methods clickhouse_stmt_methods;
+#if PHP_VERSION_ID >= 80500
+extern const zend_function_entry pdo_clickhouse_class_methods[];
+extern zend_class_entry *pdo_clickhouse_ce;
+#endif
 
 /* Driver-specific methods */
 const zend_function_entry *clickhouse_get_driver_methods(pdo_dbh_t *dbh, int kind);

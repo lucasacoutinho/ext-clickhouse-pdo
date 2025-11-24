@@ -6,34 +6,46 @@ if (!extension_loaded('pdo_clickhouse')) die('skip PDO ClickHouse extension not 
 ?>
 --FILE--
 <?php
+error_reporting(E_ALL & ~E_DEPRECATED);
 $host = getenv('CLICKHOUSE_HOST') ?: 'clickhouse-server';
 $port = getenv('CLICKHOUSE_PORT') ?: '9000';
 
+
+$class = class_exists('Pdo\\Clickhouse') ? 'Pdo\Clickhouse' : 'PDO';
+
+function ch_call($pdo, string $name, ...$args) {
+    if (method_exists($pdo, $name)) {
+        return $pdo->$name(...$args);
+    }
+    $legacy = 'clickhouse' . ucfirst($name);
+    return $pdo->$legacy(...$args);
+}
+
 try {
-    $pdo = new PDO("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
+    $pdo = new $class("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
 
     // Test initial state
-    $queryId = $pdo->clickhouseGetQueryId();
+    $queryId = ch_call($pdo, 'getQueryId');
     echo "Initial query ID: " . ($queryId === null ? "null" : $queryId) . "\n";
 
     // Set a query ID
-    $result = $pdo->clickhouseSetQueryId("test-query-123");
+    $result = ch_call($pdo, 'setQueryId', "test-query-123");
     echo "setQueryId result: " . ($result ? "success" : "failed") . "\n";
 
     // Get the query ID
-    $queryId = $pdo->clickhouseGetQueryId();
+    $queryId = ch_call($pdo, 'getQueryId');
     echo "Query ID: " . $queryId . "\n";
 
     // Execute a query
     $pdo->exec("SELECT 1");
 
     // Get last query ID (may be null if not tracked during execution)
-    $lastId = $pdo->clickhouseGetLastQueryId();
+    $lastId = ch_call($pdo, 'getLastQueryId');
     echo "Last query ID: " . ($lastId !== null ? "tracked" : "null") . "\n";
 
     // Clear query ID
-    $pdo->clickhouseSetQueryId(null);
-    $queryId = $pdo->clickhouseGetQueryId();
+    ch_call($pdo, 'setQueryId', null);
+    $queryId = ch_call($pdo, 'getQueryId');
     echo "After clearing: " . ($queryId === null ? "null" : $queryId) . "\n";
 
     echo "Test completed\n";

@@ -6,11 +6,23 @@ if (!extension_loaded('pdo_clickhouse')) die('skip PDO ClickHouse extension not 
 ?>
 --FILE--
 <?php
+error_reporting(E_ALL & ~E_DEPRECATED);
 $host = getenv('CLICKHOUSE_HOST') ?: 'clickhouse-server';
 $port = getenv('CLICKHOUSE_PORT') ?: '9000';
 
+
+$class = class_exists('Pdo\\Clickhouse') ? 'Pdo\Clickhouse' : 'PDO';
+
+function ch_call($pdo, string $name, ...$args) {
+    if (method_exists($pdo, $name)) {
+        return $pdo->$name(...$args);
+    }
+    $legacy = 'clickhouse' . ucfirst($name);
+    return $pdo->$legacy(...$args);
+}
+
 try {
-    $pdo = new PDO("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
+    $pdo = new $class("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
 
     // Create test table
     $pdo->exec("DROP TABLE IF EXISTS test_file_insert_phpt");
@@ -22,7 +34,7 @@ try {
     file_put_contents($testFile, $csvData);
 
     // Insert from file
-    $result = $pdo->clickhouseInsertFromFile('test_file_insert_phpt', $testFile, 'CSV');
+    $result = ch_call($pdo, 'insertFromFile', 'test_file_insert_phpt', $testFile, 'CSV');
     echo "insertFromFile result: " . ($result ? "success" : "failed") . "\n";
 
     // Verify row count
@@ -44,7 +56,7 @@ try {
     $tsvData = "10\tTest1\n20\tTest2\n";
     file_put_contents($tsvFile, $tsvData);
 
-    $pdo->clickhouseInsertFromFile('test_file_insert_phpt', $tsvFile, 'TabSeparated');
+    ch_call($pdo, 'insertFromFile', 'test_file_insert_phpt', $tsvFile, 'TabSeparated');
     $stmt = $pdo->query("SELECT COUNT(*) as cnt FROM test_file_insert_phpt");
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     echo "TSV rows inserted: " . $row['cnt'] . "\n";

@@ -6,11 +6,23 @@ if (!extension_loaded('pdo_clickhouse')) die('skip PDO ClickHouse extension not 
 ?>
 --FILE--
 <?php
+error_reporting(E_ALL & ~E_DEPRECATED);
 $host = getenv('CLICKHOUSE_HOST') ?: 'localhost';
 $port = getenv('CLICKHOUSE_PORT') ?: '9000';
 
+
+$class = class_exists('Pdo\\Clickhouse') ? 'Pdo\Clickhouse' : 'PDO';
+
+function ch_call($pdo, string $name, ...$args) {
+    if (method_exists($pdo, $name)) {
+        return $pdo->$name(...$args);
+    }
+    $legacy = 'clickhouse' . ucfirst($name);
+    return $pdo->$legacy(...$args);
+}
+
 try {
-    $pdo = new PDO("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
+    $pdo = new $class("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     $pdo->exec("DROP TABLE IF EXISTS pdo_test_006");
@@ -25,17 +37,17 @@ try {
 
     // Test TabSeparated format (default)
     $data = "1\tAlice\t3.14\n2\tBob\t2.71\n";
-    $pdo->clickhouseInsertFromString('pdo_test_006', $data, 'TabSeparated');
+    ch_call($pdo, 'insertFromString', 'pdo_test_006', $data, 'TabSeparated');
     echo "Inserted with TabSeparated\n";
 
     // Test CSV format
     $data = "3,Charlie,1.41\n4,David,1.73\n";
-    $pdo->clickhouseInsertFromString('pdo_test_006', $data, 'CSV');
+    ch_call($pdo, 'insertFromString', 'pdo_test_006', $data, 'CSV');
     echo "Inserted with CSV\n";
 
     // Test JSONEachRow format
     $data = '{"id":5,"name":"Eve","value":0.577}' . "\n" . '{"id":6,"name":"Frank","value":1.618}' . "\n";
-    $pdo->clickhouseInsertFromString('pdo_test_006', $data, 'JSONEachRow');
+    ch_call($pdo, 'insertFromString', 'pdo_test_006', $data, 'JSONEachRow');
     echo "Inserted with JSONEachRow\n";
 
     // Query to verify

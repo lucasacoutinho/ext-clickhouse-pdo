@@ -8,24 +8,27 @@ on:
 
 jobs:
   build:
-    name: PHP ${{ matrix.php }} - ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: PHP ${{ matrix.php }} - ClickHouse ${{ matrix.clickhouse }}
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, ubuntu-20.04]
         php: ['8.1', '8.2', '8.3', '8.4', '8.5']
+        clickhouse: ['latest', '25.8-lts', '25.3-lts', '24.8-lts', '24.3-lts']
 
     services:
       clickhouse:
-        image: clickhouse/clickhouse-server:latest
+        image: clickhouse/clickhouse-server:${{ matrix.clickhouse }}
         ports:
           - 9000:9000
           - 8123:8123
         env:
-          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+          CLICKHOUSE_DB: default
+          CLICKHOUSE_USER: default
           CLICKHOUSE_PASSWORD: ""
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+          CLICKHOUSE_SKIP_USER_SETUP: 1
         options: >-
           --health-cmd "clickhouse-client --query 'SELECT 1'"
           --health-interval 10s
@@ -62,12 +65,27 @@ jobs:
         cmake .. -DCMAKE_BUILD_TYPE=Release
         cmake --build . -j$(nproc)
 
-    - name: Wait for ClickHouse to be ready
+    - name: Wait for ClickHouse
       run: |
-        echo "Waiting for ClickHouse to be ready..."
-        timeout 60 bash -c 'until nc -z localhost 9000; do sleep 1; done' || true
-        timeout 60 bash -c 'until curl -s "http://localhost:8123/ping" | grep -q Ok; do sleep 1; done'
-        echo "ClickHouse is ready!"
+        echo "Waiting for ClickHouse HTTP port (8123)..."
+        for i in {1..30}; do
+          if curl -s http://localhost:8123/ping | grep -q Ok; then
+            echo "ClickHouse HTTP is ready"
+            break
+          fi
+          echo "Waiting for ClickHouse..."
+          sleep 2
+        done
+        echo "Waiting for ClickHouse native port (9000)..."
+        for i in {1..30}; do
+          if nc -z localhost 9000 2>/dev/null; then
+            echo "ClickHouse native port is ready"
+            break
+          fi
+          echo "Waiting for native port..."
+          sleep 2
+        done
+        echo "ClickHouse version:"
         curl -s "http://localhost:8123/?query=SELECT%20version()&user=default"
 
     - name: Run tests

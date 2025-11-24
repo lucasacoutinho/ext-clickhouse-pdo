@@ -6,11 +6,23 @@ if (!extension_loaded('pdo_clickhouse')) die('skip PDO ClickHouse extension not 
 ?>
 --FILE--
 <?php
+error_reporting(E_ALL & ~E_DEPRECATED);
 $host = getenv('CLICKHOUSE_HOST') ?: 'clickhouse-server';
 $port = getenv('CLICKHOUSE_PORT') ?: '9000';
 
+
+$class = class_exists('Pdo\\Clickhouse') ? 'Pdo\Clickhouse' : 'PDO';
+
+function ch_call($pdo, string $name, ...$args) {
+    if (method_exists($pdo, $name)) {
+        return $pdo->$name(...$args);
+    }
+    $legacy = 'clickhouse' . ucfirst($name);
+    return $pdo->$legacy(...$args);
+}
+
 try {
-    $pdo = new PDO("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
+    $pdo = new $class("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
 
     // Create test table
     $pdo->exec("DROP TABLE IF EXISTS test_batch_phpt");
@@ -23,7 +35,7 @@ try {
         "INSERT INTO test_batch_phpt VALUES (3, 'third')"
     ];
 
-    $results = $pdo->clickhouseExecuteBatch($queries);
+    $results = ch_call($pdo, 'executeBatch', $queries);
     echo "Batch execution: " . (is_array($results) ? "success" : "failed") . "\n";
     echo "Queries executed: " . count($results) . "\n";
     echo "All succeeded: " . (array_sum($results) === count($results) ? "yes" : "no") . "\n";

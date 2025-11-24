@@ -6,30 +6,42 @@ if (!extension_loaded('pdo_clickhouse')) die('skip PDO ClickHouse extension not 
 ?>
 --FILE--
 <?php
+error_reporting(E_ALL & ~E_DEPRECATED);
 $host = getenv('CLICKHOUSE_HOST') ?: 'clickhouse-server';
 $port = getenv('CLICKHOUSE_PORT') ?: '9000';
 
+
+$class = class_exists('Pdo\\Clickhouse') ? 'Pdo\Clickhouse' : 'PDO';
+
+function ch_call($pdo, string $name, ...$args) {
+    if (method_exists($pdo, $name)) {
+        return $pdo->$name(...$args);
+    }
+    $legacy = 'clickhouse' . ucfirst($name);
+    return $pdo->$legacy(...$args);
+}
+
 try {
-    $pdo = new PDO("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
+    $pdo = new $class("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
 
     // Test setCompression and getCompression
-    echo "Initial compression: " . $pdo->clickhouseGetCompression() . "\n";
+    echo "Initial compression: " . ch_call($pdo, 'getCompression') . "\n";
 
     // Enable LZ4 compression
-    $result = $pdo->clickhouseSetCompression(1);
+    $result = ch_call($pdo, 'setCompression', 1);
     echo "setCompression(1): " . ($result ? "success" : "failed") . "\n";
-    echo "Compression after LZ4: " . $pdo->clickhouseGetCompression() . "\n";
+    echo "Compression after LZ4: " . ch_call($pdo, 'getCompression') . "\n";
 
     // Enable ZSTD compression
-    $pdo->clickhouseSetCompression(2);
-    echo "Compression after ZSTD: " . $pdo->clickhouseGetCompression() . "\n";
+    ch_call($pdo, 'setCompression', 2);
+    echo "Compression after ZSTD: " . ch_call($pdo, 'getCompression') . "\n";
 
     // Disable compression
-    $pdo->clickhouseSetCompression(0);
-    echo "Compression after disable: " . $pdo->clickhouseGetCompression() . "\n";
+    ch_call($pdo, 'setCompression', 0);
+    echo "Compression after disable: " . ch_call($pdo, 'getCompression') . "\n";
 
     // Test with actual query
-    $pdo->clickhouseSetCompression(1);
+    ch_call($pdo, 'setCompression', 1);
     $stmt = $pdo->query("SELECT 1 as num");
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     echo "Query with compression: " . $row['num'] . "\n";

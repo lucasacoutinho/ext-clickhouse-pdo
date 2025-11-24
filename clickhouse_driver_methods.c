@@ -51,6 +51,40 @@ static PHP_METHOD(PDO, clickhouseSetTimeout);
 static PHP_METHOD(PDO, clickhouseGetTimeout);
 static PHP_METHOD(PDO, clickhouseSetLogCallback);
 
+/* New driver-specific subclass methods */
+static PHP_METHOD(Pdo_Clickhouse, insert);
+static PHP_METHOD(Pdo_Clickhouse, insertFromString);
+static PHP_METHOD(Pdo_Clickhouse, getDatabases);
+static PHP_METHOD(Pdo_Clickhouse, getTables);
+static PHP_METHOD(Pdo_Clickhouse, describeTable);
+static PHP_METHOD(Pdo_Clickhouse, getServerInfo);
+static PHP_METHOD(Pdo_Clickhouse, setQuerySetting);
+static PHP_METHOD(Pdo_Clickhouse, clearQuerySettings);
+static PHP_METHOD(Pdo_Clickhouse, setProgressCallback);
+static PHP_METHOD(Pdo_Clickhouse, setProfileCallback);
+static PHP_METHOD(Pdo_Clickhouse, queryAsync);
+static PHP_METHOD(Pdo_Clickhouse, asyncPoll);
+static PHP_METHOD(Pdo_Clickhouse, asyncWait);
+static PHP_METHOD(Pdo_Clickhouse, asyncIsReady);
+static PHP_METHOD(Pdo_Clickhouse, asyncCancel);
+static PHP_METHOD(Pdo_Clickhouse, insertFromFile);
+static PHP_METHOD(Pdo_Clickhouse, setCompression);
+static PHP_METHOD(Pdo_Clickhouse, getCompression);
+static PHP_METHOD(Pdo_Clickhouse, setQueryId);
+static PHP_METHOD(Pdo_Clickhouse, getQueryId);
+static PHP_METHOD(Pdo_Clickhouse, getLastQueryId);
+static PHP_METHOD(Pdo_Clickhouse, executeBatch);
+static PHP_METHOD(Pdo_Clickhouse, setSSL);
+static PHP_METHOD(Pdo_Clickhouse, setSSLVerify);
+static PHP_METHOD(Pdo_Clickhouse, setSSLCA);
+static PHP_METHOD(Pdo_Clickhouse, setSSLCert);
+static PHP_METHOD(Pdo_Clickhouse, sslAvailable);
+static PHP_METHOD(Pdo_Clickhouse, reconnect);
+static PHP_METHOD(Pdo_Clickhouse, isConnected);
+static PHP_METHOD(Pdo_Clickhouse, setTimeout);
+static PHP_METHOD(Pdo_Clickhouse, getTimeout);
+static PHP_METHOD(Pdo_Clickhouse, setLogCallback);
+
 /* Bridge function to call PHP progress callback from C */
 void php_progress_callback_bridge(clickhouse_progress *progress, void *user_data) {
     pdo_clickhouse_db_handle *H = (pdo_clickhouse_db_handle *)user_data;
@@ -253,6 +287,43 @@ static const zend_function_entry pdo_clickhouse_methods[] = {
     PHP_ME(PDO, clickhouseSetTimeout, arginfo_clickhouse_settimeout, ZEND_ACC_PUBLIC)
     PHP_ME(PDO, clickhouseGetTimeout, arginfo_clickhouse_gettimeout, ZEND_ACC_PUBLIC)
     PHP_ME(PDO, clickhouseSetLogCallback, arginfo_clickhouse_setlogcallback, ZEND_ACC_PUBLIC)
+    PHP_FE_END
+};
+
+/* Driver-specific PDO subclass methods (non-deprecated API) */
+const zend_function_entry pdo_clickhouse_class_methods[] = {
+    PHP_ME(Pdo_Clickhouse, insert, arginfo_clickhouse_insert, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, insertFromString, arginfo_clickhouse_insertfromstring, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, getDatabases, arginfo_clickhouse_getdatabases, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, getTables, arginfo_clickhouse_gettables, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, describeTable, arginfo_clickhouse_describetable, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, getServerInfo, arginfo_clickhouse_getserverinfo, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, setQuerySetting, arginfo_clickhouse_setquerysetting, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, clearQuerySettings, arginfo_clickhouse_clearquerysettings, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, setProgressCallback, arginfo_clickhouse_setprogresscallback, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, setProfileCallback, arginfo_clickhouse_setprofilecallback, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, queryAsync, arginfo_clickhouse_queryasync, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, asyncPoll, arginfo_clickhouse_asyncpoll, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, asyncWait, arginfo_clickhouse_asyncwait, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, asyncIsReady, arginfo_clickhouse_asyncisready, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, asyncCancel, arginfo_clickhouse_asynccancel, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, insertFromFile, arginfo_clickhouse_insertfromfile, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, setCompression, arginfo_clickhouse_setcompression, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, getCompression, arginfo_clickhouse_getcompression, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, setQueryId, arginfo_clickhouse_setqueryid, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, getQueryId, arginfo_clickhouse_getqueryid, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, getLastQueryId, arginfo_clickhouse_getlastqueryid, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, executeBatch, arginfo_clickhouse_executebatch, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, setSSL, arginfo_clickhouse_setssl, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, setSSLVerify, arginfo_clickhouse_setsslverify, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, setSSLCA, arginfo_clickhouse_setsslca, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, setSSLCert, arginfo_clickhouse_setsslcert, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, sslAvailable, arginfo_clickhouse_sslavailable, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, reconnect, arginfo_clickhouse_reconnect, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, isConnected, arginfo_clickhouse_isconnected, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, setTimeout, arginfo_clickhouse_settimeout, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, getTimeout, arginfo_clickhouse_gettimeout, ZEND_ACC_PUBLIC)
+    PHP_ME(Pdo_Clickhouse, setLogCallback, arginfo_clickhouse_setlogcallback, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -1287,4 +1358,166 @@ static PHP_METHOD(PDO, clickhouseSetLogCallback)
         H->has_log_callback = 1;
     }
     RETURN_TRUE;
+}
+
+/* Wrapper methods for the non-deprecated Pdo\\Clickhouse subclass.
+ * They simply forward to the legacy driver-specific handlers. */
+static PHP_METHOD(Pdo_Clickhouse, insert)
+{
+    zim_PDO_clickhouseInsert(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, insertFromString)
+{
+    zim_PDO_clickhouseInsertFromString(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, getDatabases)
+{
+    zim_PDO_clickhouseGetDatabases(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, getTables)
+{
+    zim_PDO_clickhouseGetTables(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, describeTable)
+{
+    zim_PDO_clickhouseDescribeTable(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, getServerInfo)
+{
+    zim_PDO_clickhouseGetServerInfo(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, setQuerySetting)
+{
+    zim_PDO_clickhouseSetQuerySetting(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, clearQuerySettings)
+{
+    zim_PDO_clickhouseClearQuerySettings(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, setProgressCallback)
+{
+    zim_PDO_clickhouseSetProgressCallback(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, setProfileCallback)
+{
+    zim_PDO_clickhouseSetProfileCallback(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, queryAsync)
+{
+    zim_PDO_clickhouseQueryAsync(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, asyncPoll)
+{
+    zim_PDO_clickhouseAsyncPoll(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, asyncWait)
+{
+    zim_PDO_clickhouseAsyncWait(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, asyncIsReady)
+{
+    zim_PDO_clickhouseAsyncIsReady(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, asyncCancel)
+{
+    zim_PDO_clickhouseAsyncCancel(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, insertFromFile)
+{
+    zim_PDO_clickhouseInsertFromFile(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, setCompression)
+{
+    zim_PDO_clickhouseSetCompression(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, getCompression)
+{
+    zim_PDO_clickhouseGetCompression(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, setQueryId)
+{
+    zim_PDO_clickhouseSetQueryId(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, getQueryId)
+{
+    zim_PDO_clickhouseGetQueryId(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, getLastQueryId)
+{
+    zim_PDO_clickhouseGetLastQueryId(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, executeBatch)
+{
+    zim_PDO_clickhouseExecuteBatch(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, setSSL)
+{
+    zim_PDO_clickhouseSetSSL(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, setSSLVerify)
+{
+    zim_PDO_clickhouseSetSSLVerify(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, setSSLCA)
+{
+    zim_PDO_clickhouseSetSSLCA(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, setSSLCert)
+{
+    zim_PDO_clickhouseSetSSLCert(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, sslAvailable)
+{
+    zim_PDO_clickhouseSslAvailable(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, reconnect)
+{
+    zim_PDO_clickhouseReconnect(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, isConnected)
+{
+    zim_PDO_clickhouseIsConnected(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, setTimeout)
+{
+    zim_PDO_clickhouseSetTimeout(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, getTimeout)
+{
+    zim_PDO_clickhouseGetTimeout(INTERNAL_FUNCTION_PARAM_PASSTHRU);
+}
+
+static PHP_METHOD(Pdo_Clickhouse, setLogCallback)
+{
+    zim_PDO_clickhouseSetLogCallback(INTERNAL_FUNCTION_PARAM_PASSTHRU);
 }

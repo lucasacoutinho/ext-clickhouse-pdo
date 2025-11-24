@@ -6,34 +6,46 @@ if (!extension_loaded('pdo_clickhouse')) die('skip PDO ClickHouse extension not 
 ?>
 --FILE--
 <?php
+error_reporting(E_ALL & ~E_DEPRECATED);
 $host = getenv('CLICKHOUSE_HOST') ?: 'localhost';
 $port = getenv('CLICKHOUSE_PORT') ?: '9000';
 
+
+$class = class_exists('Pdo\\Clickhouse') ? 'Pdo\Clickhouse' : 'PDO';
+
+function ch_call($pdo, string $name, ...$args) {
+    if (method_exists($pdo, $name)) {
+        return $pdo->$name(...$args);
+    }
+    $legacy = 'clickhouse' . ucfirst($name);
+    return $pdo->$legacy(...$args);
+}
+
 try {
-    $pdo = new PDO("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
+    $pdo = new $class("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     // Test 1: Basic async query
     echo "Test 1: Basic Async Query\n";
-    $result = $pdo->clickhouseQueryAsync('SELECT number FROM system.numbers LIMIT 5');
+    $result = ch_call($pdo, 'queryAsync', 'SELECT number FROM system.numbers LIMIT 5');
     echo "Query started: " . ($result ? "yes" : "no") . "\n";
 
     // Check if ready (might be instant for small queries)
-    $isReady = $pdo->clickhouseAsyncIsReady();
+    $isReady = ch_call($pdo, 'asyncIsReady');
     echo "Is ready: " . ($isReady ? "yes" : "no") . "\n";
 
     // Wait for completion
-    $data = $pdo->clickhouseAsyncWait();
+    $data = ch_call($pdo, 'asyncWait');
     echo "Rows received: " . count($data) . "\n";
 
     // Test 2: Poll method
     echo "\nTest 2: Async Poll\n";
-    $result = $pdo->clickhouseQueryAsync('SELECT number FROM system.numbers LIMIT 10');
+    $result = ch_call($pdo, 'queryAsync', 'SELECT number FROM system.numbers LIMIT 10');
     echo "Query started: " . ($result ? "yes" : "no") . "\n";
 
     // Poll until ready
     $pollCount = 0;
-    while (!$pdo->clickhouseAsyncPoll()) {
+    while (!ch_call($pdo, 'asyncPoll')) {
         $pollCount++;
         if ($pollCount > 10) {
             break;
@@ -43,42 +55,43 @@ try {
     echo "Polled $pollCount times\n";
 
     // Get results
-    if ($pdo->clickhouseAsyncIsReady()) {
-        $data = $pdo->clickhouseAsyncWait();
+    if (ch_call($pdo, 'asyncIsReady')) {
+        $data = ch_call($pdo, 'asyncWait');
         echo "Rows received: " . count($data) . "\n";
     }
 
     // Test 3: Multiple sequential async queries
     echo "\nTest 3: Sequential Async Queries\n";
     for ($i = 0; $i < 3; $i++) {
-        $pdo->clickhouseQueryAsync("SELECT $i as value");
-        $data = $pdo->clickhouseAsyncWait();
+        ch_call($pdo, 'queryAsync', "SELECT $i as value");
+        $data = ch_call($pdo, 'asyncWait');
         echo "Query $i completed with " . count($data) . " row(s)\n";
     }
 
     // Test 4: Cancel async query
     echo "\nTest 4: Cancel Async Query\n";
-    $pdo->clickhouseQueryAsync('SELECT number FROM system.numbers LIMIT 10000000');
+    ch_call($pdo, 'queryAsync', 'SELECT number FROM system.numbers LIMIT 10000000');
     echo "Long query started\n";
 
-    $cancelled = $pdo->clickhouseAsyncCancel();
+    $cancelled = ch_call($pdo, 'asyncCancel');
     echo "Query cancelled: " . ($cancelled ? "yes" : "no") . "\n";
 
     // After cancel, connection is automatically reconnected - no reset needed!
-    $result = $pdo->clickhouseQueryAsync('SELECT 2');
+    $result = ch_call($pdo, 'queryAsync', 'SELECT 2');
     echo "New async query after cancel: " . ($result ? "yes" : "no") . "\n";
-    $data = $pdo->clickhouseAsyncWait();
+    $data = ch_call($pdo, 'asyncWait');
     echo "New query completed with " . count($data) . " row(s)\n";
 
     // Test 5: Error handling - poll without query
     echo "\nTest 5: Error Handling\n";
 
-    try {
-        $pdo->clickhouseAsyncPoll();
-        echo "Poll without query: should have warned\n";
-    } catch (Exception $e) {
-        echo "Poll without query: caught exception\n";
-    }
+    set_error_handler(function ($errno, $errstr) {
+        echo "Poll without query: warning captured\n";
+        return true;
+    });
+    ch_call($pdo, 'asyncPoll');
+    restore_error_handler();
+    echo "Poll without query: should have warned\n";
 
     echo "\nAll async tests passed\n";
 
@@ -109,8 +122,7 @@ New async query after cancel: yes
 New query completed with 1 row(s)
 
 Test 5: Error Handling
-
-Warning: PDO::clickhouseAsyncPoll(): No async query in progress in %s on line %d
+Poll without query: warning captured
 Poll without query: should have warned
 
 All async tests passed

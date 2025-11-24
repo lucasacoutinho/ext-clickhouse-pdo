@@ -6,16 +6,28 @@ if (!extension_loaded('pdo_clickhouse')) die('skip PDO ClickHouse extension not 
 ?>
 --FILE--
 <?php
+error_reporting(E_ALL & ~E_DEPRECATED);
 $host = getenv('CLICKHOUSE_HOST') ?: 'clickhouse-server';
 $port = getenv('CLICKHOUSE_PORT') ?: '9000';
 
+
+$class = class_exists('Pdo\\Clickhouse') ? 'Pdo\Clickhouse' : 'PDO';
+
+function ch_call($pdo, string $name, ...$args) {
+    if (method_exists($pdo, $name)) {
+        return $pdo->$name(...$args);
+    }
+    $legacy = 'clickhouse' . ucfirst($name);
+    return $pdo->$legacy(...$args);
+}
+
 try {
-    $pdo = new PDO("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
+    $pdo = new $class("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
 
     $logMessages = [];
 
     // Set log callback
-    $result = $pdo->clickhouseSetLogCallback(function($message) use (&$logMessages) {
+    $result = ch_call($pdo, 'setLogCallback', function($message) use (&$logMessages) {
         $logMessages[] = $message;
     });
     echo "setLogCallback: " . ($result ? "success" : "failed") . "\n";
@@ -30,7 +42,7 @@ try {
     echo "Messages captured: " . (count($logMessages) >= 0 ? "OK" : "failed") . "\n";
 
     // Clear callback
-    $result = $pdo->clickhouseSetLogCallback(null);
+    $result = ch_call($pdo, 'setLogCallback', null);
     echo "Clear callback: " . ($result ? "success" : "failed") . "\n";
 
     echo "Test completed\n";

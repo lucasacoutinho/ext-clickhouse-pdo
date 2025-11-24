@@ -6,14 +6,26 @@ if (!extension_loaded('pdo_clickhouse')) die('skip PDO ClickHouse extension not 
 ?>
 --FILE--
 <?php
+error_reporting(E_ALL & ~E_DEPRECATED);
 $host = getenv('CLICKHOUSE_HOST') ?: 'clickhouse-server';
 $port = getenv('CLICKHOUSE_PORT') ?: '9000';
 
+
+$class = class_exists('Pdo\\Clickhouse') ? 'Pdo\Clickhouse' : 'PDO';
+
+function ch_call($pdo, string $name, ...$args) {
+    if (method_exists($pdo, $name)) {
+        return $pdo->$name(...$args);
+    }
+    $legacy = 'clickhouse' . ucfirst($name);
+    return $pdo->$legacy(...$args);
+}
+
 try {
-    $pdo = new PDO("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
+    $pdo = new $class("clickhouse:host=$host;port=$port;dbname=default", 'default', '');
 
     // Check if connected
-    $connected = $pdo->clickhouseIsConnected();
+    $connected = ch_call($pdo, 'isConnected');
     echo "Initial connection: " . ($connected ? "yes" : "no") . "\n";
 
     // Execute a query to ensure connection works
@@ -22,11 +34,11 @@ try {
     echo "Query before reconnect: " . $row['num'] . "\n";
 
     // Reconnect
-    $result = $pdo->clickhouseReconnect();
+    $result = ch_call($pdo, 'reconnect');
     echo "Reconnect result: " . ($result ? "success" : "failed") . "\n";
 
     // Check connection after reconnect
-    $connected = $pdo->clickhouseIsConnected();
+    $connected = ch_call($pdo, 'isConnected');
     echo "After reconnect: " . ($connected ? "yes" : "no") . "\n";
 
     // Execute query after reconnect
