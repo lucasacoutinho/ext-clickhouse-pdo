@@ -23,6 +23,9 @@ jobs:
         ports:
           - 9000:9000
           - 8123:8123
+        env:
+          CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+          CLICKHOUSE_PASSWORD: ""
         options: >-
           --health-cmd "clickhouse-client --query 'SELECT 1'"
           --health-interval 10s
@@ -63,9 +66,9 @@ jobs:
       run: |
         echo "Waiting for ClickHouse to be ready..."
         timeout 60 bash -c 'until nc -z localhost 9000; do sleep 1; done' || true
-        timeout 60 bash -c 'until curl -s http://localhost:8123/?query=SELECT%201 | grep -q 1; do sleep 1; done'
+        timeout 60 bash -c 'until curl -s "http://localhost:8123/ping" | grep -q Ok; do sleep 1; done'
         echo "ClickHouse is ready!"
-        curl -s http://localhost:8123/?query=SELECT%20version()
+        curl -s "http://localhost:8123/?query=SELECT%20version()&user=default"
 
     - name: Run tests
       run: |
