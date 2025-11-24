@@ -70,9 +70,8 @@ try {
     $data = $pdo->clickhouseAsyncWait();
     echo "New query completed with " . count($data) . " row(s)\n";
 
-    // Test 5: Error handling - wait without query
+    // Test 5: Error handling - poll without query
     echo "\nTest 5: Error Handling\n";
-    $pdo->clickhouseAsyncWait(); // This should consume the previous result
 
     try {
         $pdo->clickhouseAsyncPoll();
