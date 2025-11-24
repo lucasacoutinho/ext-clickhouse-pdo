@@ -2,6 +2,13 @@
 
 All notable changes to the PDO ClickHouse Driver will be documented in this file.
 
+## [0.3.0] - 2025-11-24
+
+### Changed
+
+- Bumped driver version to 0.3.0 to stay in sync with the core extension and Laravel adapter releases.
+- No functional changes from 0.2.x; version alignment only.
+
 ## [0.2.0] - 2025-11-23
 
 ### Added
