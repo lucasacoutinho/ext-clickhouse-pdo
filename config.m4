@@ -29,8 +29,6 @@ if test "$PHP_PDO_CLICKHOUSE" != "no"; then
     ../clickhouse/src/cityhash.c,
     $ext_shared,, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 -std=c11)
 
-  PHP_ADD_BUILD_DIR($ext_builddir/../clickhouse/src)
-
   dnl Add dependency on PDO
   PHP_ADD_EXTENSION_DEP(pdo_clickhouse, pdo)
 fi
