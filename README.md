@@ -11,6 +11,18 @@ cmake --build .
 sudo cmake --install .
 ```
 
+### Building with phpize
+
+If you prefer `phpize`/`./configure` builds:
+
+```bash
+phpize
+./configure --with-pdo-clickhouse=/path/to/ext-clickhouse   # use ../clickhouse/src when building from this monorepo
+make && sudo make install
+```
+
+Point `--with-pdo-clickhouse` to the ClickHouse native extension sources (repo root or its `src/` directory). Without those sources you will hit missing `buffer.c` errors during `make`.
+
 Enable the extension in `php.ini`:
 ```ini
 extension=pdo_clickhouse.so

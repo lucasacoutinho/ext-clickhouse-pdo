@@ -2,6 +2,13 @@
 
 All notable changes to the PDO ClickHouse Driver will be documented in this file.
 
+## [0.3.1] - 2025-11-25
+
+### Changed
+
+- Bumped driver version to 0.3.1 for the release tag.
+- Removed build artifacts to ship a clean source tree.
+
 ## [0.3.0] - 2025-11-24
 
 ### Changed

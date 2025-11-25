@@ -11,10 +11,10 @@
 #include "pdo/php_pdo_driver.h"
 
 /* Include the native clickhouse extension headers */
-#include "../clickhouse/src/buffer.h"
-#include "../clickhouse/src/protocol.h"
-#include "../clickhouse/src/connection.h"
-#include "../clickhouse/src/column.h"
+#include "buffer.h"
+#include "protocol.h"
+#include "connection.h"
+#include "column.h"
 
 /* ClickHouse-specific PDO attributes */
 enum {
