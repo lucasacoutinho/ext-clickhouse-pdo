@@ -10,7 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 
 # Build ext-clickhouse first (pdo_clickhouse depends on it)
-RUN git clone --recursive https://github.com/lightprofco/ext-clickhouse.git ext-clickhouse \
+RUN --mount=type=secret,id=gh_token \
+    GH_TOKEN=$(cat /run/secrets/gh_token) \
+    && git clone --recursive https://x-access-token:${GH_TOKEN}@github.com/lightprofco/ext-clickhouse.git ext-clickhouse \
     && cd ext-clickhouse \
     && phpize \
     && ./configure --enable-clickhouse \

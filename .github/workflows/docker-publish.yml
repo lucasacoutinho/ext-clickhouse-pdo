@@ -50,6 +50,8 @@ jobs:
           context: .
           push: true
           build-args: PHP_VERSION=${{ matrix.php-version }}
+          secrets: |
+            gh_token=${{ secrets.EXT_CLICKHOUSE_TOKEN }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |
