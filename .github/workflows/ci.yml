@@ -38,7 +38,7 @@ jobs:
 
       - name: Build ext-clickhouse (dependency)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.EXT_CLICKHOUSE_TOKEN }}
         run: |
           git clone --recursive https://x-access-token:${GH_TOKEN}@github.com/lightprofco/ext-clickhouse.git ../ext-clickhouse
           cd ../ext-clickhouse
