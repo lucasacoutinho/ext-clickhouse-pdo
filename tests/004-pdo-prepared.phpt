@@ -32,8 +32,8 @@ var_dump($row['b']);
 echo "OK\n";
 ?>
 --EXPECT--
-int(42)
+string(2) "42"
 string(5) "hello"
-int(100)
+string(3) "100"
 string(5) "world"
 OK

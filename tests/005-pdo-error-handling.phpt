@@ -43,6 +43,6 @@ echo "OK\n";
 Caught PDOException
 bool(true)
 bool(true)
-string(15) "'it\'s a test'"
+string(%d) "'it\'s a test'"
 Rollback correctly rejected
 OK

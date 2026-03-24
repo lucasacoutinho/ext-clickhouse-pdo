@@ -37,11 +37,11 @@ var_dump($meta2['native_type']);
 
 echo "OK\n";
 ?>
---EXPECT--
+--EXPECTF--
 string(2) "id"
 string(6) "UInt64"
 string(4) "name"
 string(6) "String"
 string(5) "score"
-string(18) "Nullable(Float64)"
+string(%d) "Nullable(Float64)"
 OK
