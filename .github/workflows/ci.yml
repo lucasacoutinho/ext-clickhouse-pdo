@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.1', '8.2', '8.3', '8.4']
+
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:24
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "clickhouse-client --query 'SELECT 1'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          tools: phpize
+          extensions: pdo
+
+      - name: Build ext-clickhouse (dependency)
+        run: |
+          git clone --recursive https://github.com/lightprofco/ext-clickhouse.git ../ext-clickhouse
+          cd ../ext-clickhouse
+          phpize
+          ./configure --enable-clickhouse
+          make -j$(nproc)
+          sudo make install
+          echo "extension=clickhouse" | sudo tee $(php -r 'echo php_ini_scanned_dir();')/90-clickhouse.ini
+
+      - name: Build pdo_clickhouse
+        run: |
+          phpize
+          ./configure --enable-pdo-clickhouse
+          make -j$(nproc)
+
+      - name: Run tests
+        env:
+          CLICKHOUSE_HOST: 127.0.0.1
+          CLICKHOUSE_PORT: '9000'
+        run: |
+          TEST_PHP_EXECUTABLE=$(which php) \
+            php run-tests.php \
+            -d extension=clickhouse \
+            -d extension=modules/pdo_clickhouse.so \
+            --show-diff -q tests/*.phpt

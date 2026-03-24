@@ -1,0 +1,64 @@
+#ifndef PHP_PDO_CLICKHOUSE_H
+#define PHP_PDO_CLICKHOUSE_H
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+extern "C" {
+#include "php.h"
+#include "ext/pdo/php_pdo.h"
+#include "ext/pdo/php_pdo_driver.h"
+}
+
+#define PHP_PDO_CLICKHOUSE_VERSION "0.1.0"
+
+extern const pdo_driver_t pdo_clickhouse_driver;
+
+#include "clickhouse/client.h"
+#include "clickhouse/block.h"
+
+#include <memory>
+#include <string>
+#include <vector>
+
+/* Per-connection driver data — stored in pdo_dbh_t->driver_data */
+struct pdo_clickhouse_db_handle {
+    std::unique_ptr<clickhouse::Client> client;
+    std::unique_ptr<clickhouse::ClientOptions> options;
+
+    /* Error state */
+    int errcode;
+    std::string errmsg;
+};
+
+/* Per-statement driver data — stored in pdo_stmt_t->driver_data */
+struct pdo_clickhouse_stmt {
+    pdo_clickhouse_db_handle *H;       /* back-reference to connection */
+
+    std::string query;                  /* original SQL */
+    std::string rewritten_query;        /* after placeholder rewriting */
+
+    /* SELECT results: all blocks collected into rows */
+    std::vector<clickhouse::Block> blocks;
+    std::vector<std::string> col_names;
+    std::vector<std::string> col_type_names;
+    size_t total_rows;
+    size_t current_row;
+
+    /* Map from flat row index to (block_index, row_within_block) */
+    std::vector<std::pair<size_t, size_t>> row_map;
+
+    bool executed;
+    zend_long affected_rows;
+};
+
+/* Method tables */
+extern const struct pdo_dbh_methods clickhouse_dbh_methods;
+extern const struct pdo_stmt_methods clickhouse_stmt_methods;
+
+/* Error helper */
+void pdo_clickhouse_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt,
+                          int errcode, const char *errmsg, const char *sqlstate);
+
+#endif /* PHP_PDO_CLICKHOUSE_H */
