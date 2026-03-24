@@ -37,8 +37,10 @@ jobs:
           extensions: pdo
 
       - name: Build ext-clickhouse (dependency)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git clone --recursive https://github.com/lightprofco/ext-clickhouse.git ../ext-clickhouse
+          git clone --recursive https://x-access-token:${GH_TOKEN}@github.com/lightprofco/ext-clickhouse.git ../ext-clickhouse
           cd ../ext-clickhouse
           phpize
           ./configure --enable-clickhouse
