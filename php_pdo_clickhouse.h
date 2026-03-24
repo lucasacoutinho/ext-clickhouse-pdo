@@ -11,7 +11,7 @@ extern "C" {
 #include "ext/pdo/php_pdo_driver.h"
 }
 
-#define PHP_PDO_CLICKHOUSE_VERSION "0.1.0"
+#define PHP_PDO_CLICKHOUSE_VERSION "0.2.0"
 
 extern const pdo_driver_t pdo_clickhouse_driver;
 
