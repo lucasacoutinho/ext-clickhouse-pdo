@@ -10,8 +10,8 @@ A PDO driver for ClickHouse using the native TCP protocol (port 9000). Built on 
 ## Build
 
 ```bash
-git clone https://github.com/lightprofco/ext-pdo-clickhouse.git
-cd ext-pdo-clickhouse
+git clone https://github.com/lightprofco/ext-clickhouse-pdo.git
+cd ext-clickhouse-pdo
 
 # ext-clickhouse must be in a sibling directory
 ls ../ext-clickhouse/php_clickhouse.h  # verify it's there
@@ -55,7 +55,7 @@ $pdo->query("INSERT INTO test VALUES (1, 'Alice'), (2, 'Bob')");
 Pre-built images are available on GitHub Container Registry:
 
 ```bash
-docker pull ghcr.io/lightprofco/pdo-clickhouse:php8.4-latest
+docker pull ghcr.io/lightprofco/ext-clickhouse-pdo:php8.4-latest
 ```
 
 ## Running tests
