@@ -51,12 +51,19 @@ static int clickhouse_stmt_execute(pdo_stmt_t *stmt)
     std::string upper = query_str;
     for (auto &c : upper) c = toupper(c);
     size_t start = upper.find_first_not_of(" \t\n\r");
-    bool is_select = (start != std::string::npos) &&
-        (upper.compare(start, 6, "SELECT") == 0 ||
-         upper.compare(start, 4, "SHOW") == 0 ||
-         upper.compare(start, 8, "DESCRIBE") == 0 ||
-         upper.compare(start, 7, "EXPLAIN") == 0 ||
-         upper.compare(start, 4, "WITH") == 0);
+    /* Skip leading parentheses for union queries: (SELECT ...) UNION ALL ... */
+    size_t check = start;
+    if (check != std::string::npos) {
+        while (check < upper.size() && upper[check] == '(') check++;
+        while (check < upper.size() && (upper[check] == ' ' || upper[check] == '\t')) check++;
+    }
+    bool is_select = (check != std::string::npos && check < upper.size()) &&
+        (upper.compare(check, 6, "SELECT") == 0 ||
+         upper.compare(check, 4, "SHOW") == 0 ||
+         upper.compare(check, 8, "DESCRIBE") == 0 ||
+         upper.compare(check, 7, "EXPLAIN") == 0 ||
+         upper.compare(check, 6, "EXISTS") == 0 ||
+         upper.compare(check, 4, "WITH") == 0);
 
     try {
         if (is_select) {
