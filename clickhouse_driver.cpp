@@ -1,5 +1,6 @@
 #include "php_pdo_clickhouse.h"
 
+#include <algorithm>
 #include <cstring>
 #include <chrono>
 #include <string>
@@ -226,19 +227,21 @@ const struct pdo_dbh_methods clickhouse_dbh_methods = {
 static int pdo_clickhouse_handle_factory(pdo_dbh_t *dbh, zval *driver_options)
 {
     struct pdo_data_src_parser parsed[] = {
-        { "host",     NULL, 0 },
-        { "port",     NULL, 0 },
-        { "dbname",   NULL, 0 },
+        { "host",        NULL, 0 },
+        { "port",        NULL, 0 },
+        { "dbname",      NULL, 0 },
+        { "compression", NULL, 0 },
     };
 
     php_pdo_parse_data_source(dbh->data_source, dbh->data_source_len,
                               parsed, sizeof(parsed) / sizeof(parsed[0]));
 
-    const char *host   = parsed[0].optval ? parsed[0].optval : "localhost";
-    int port           = parsed[1].optval ? atoi(parsed[1].optval) : 9000;
-    const char *dbname = parsed[2].optval ? parsed[2].optval : "default";
-    const char *user   = dbh->username ? dbh->username : "default";
-    const char *pass   = dbh->password ? dbh->password : "";
+    const char *host        = parsed[0].optval ? parsed[0].optval : "localhost";
+    int port               = parsed[1].optval ? atoi(parsed[1].optval) : 9000;
+    const char *dbname     = parsed[2].optval ? parsed[2].optval : "default";
+    const char *compression_str = parsed[3].optval ? parsed[3].optval : nullptr;
+    const char *user       = dbh->username ? dbh->username : "default";
+    const char *pass       = dbh->password ? dbh->password : "";
 
     /* Allocate driver handle — respecting is_persistent */
     auto *H = static_cast<pdo_clickhouse_db_handle *>(
@@ -263,6 +266,17 @@ static int pdo_clickhouse_handle_factory(pdo_dbh_t *dbh, zval *driver_options)
         /* Parse timeout from driver_options if provided */
         zend_long timeout = pdo_attr_lval(driver_options, PDO_ATTR_TIMEOUT, 5);
         opts->SetConnectionConnectTimeout(std::chrono::seconds(timeout));
+
+        /* Parse compression from DSN parameter */
+        if (compression_str) {
+            std::string comp(compression_str);
+            std::transform(comp.begin(), comp.end(), comp.begin(), ::tolower);
+            if (comp == "lz4") {
+                opts->SetCompressionMethod(clickhouse::CompressionMethod::LZ4);
+            } else if (comp == "zstd") {
+                opts->SetCompressionMethod(clickhouse::CompressionMethod::ZSTD);
+            }
+        }
 
         H->options = std::move(opts);
         H->client = std::make_unique<clickhouse::Client>(*H->options);
