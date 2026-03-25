@@ -21,6 +21,14 @@ void pdo_clickhouse_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt,
     } else {
         strncpy(*pdo_err, "HY000", sizeof(*pdo_err));
     }
+
+    /* During factory (dbh->methods not yet set), PDO core cannot fetch
+     * driver error info — throw a PDOException directly so the real
+     * message reaches userland instead of generic "Constructor failed". */
+    if (!dbh->methods) {
+        pdo_throw_exception(static_cast<unsigned int>(errcode),
+                            const_cast<char *>(H->errmsg.c_str()), pdo_err);
+    }
 }
 
 static void clickhouse_handle_closer(pdo_dbh_t *dbh)
