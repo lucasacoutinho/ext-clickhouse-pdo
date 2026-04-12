@@ -27,6 +27,9 @@ struct pdo_clickhouse_db_handle {
     std::unique_ptr<clickhouse::Client> client;
     std::unique_ptr<clickhouse::ClientOptions> options;
 
+    /* Connection state */
+    bool ssl_enabled;
+
     /* Error state */
     int errcode;
     std::string errmsg;

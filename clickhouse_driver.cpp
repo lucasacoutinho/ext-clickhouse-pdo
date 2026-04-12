@@ -185,7 +185,7 @@ static int clickhouse_handle_get_attribute(pdo_dbh_t *dbh, zend_long attr, zval 
             }
         }
         case PDO_ATTR_CONNECTION_STATUS:
-            ZVAL_STRING(val, "Connected via native TCP");
+            ZVAL_STRING(val, H->ssl_enabled ? "Connected via native TCP (TLS)" : "Connected via native TCP");
             return 1;
         default:
             return 0;
@@ -239,6 +239,9 @@ static int pdo_clickhouse_handle_factory(pdo_dbh_t *dbh, zval *driver_options)
         { "port",        NULL, 0 },
         { "dbname",      NULL, 0 },
         { "compression", NULL, 0 },
+        { "ssl",         NULL, 0 },
+        { "skip_verify", NULL, 0 },
+        { "ca_path",     NULL, 0 },
     };
 
     php_pdo_parse_data_source(dbh->data_source, dbh->data_source_len,
@@ -248,6 +251,9 @@ static int pdo_clickhouse_handle_factory(pdo_dbh_t *dbh, zval *driver_options)
     int port               = parsed[1].optval ? atoi(parsed[1].optval) : 9000;
     const char *dbname     = parsed[2].optval ? parsed[2].optval : "default";
     const char *compression_str = parsed[3].optval ? parsed[3].optval : nullptr;
+    const char *ssl_str         = parsed[4].optval ? parsed[4].optval : nullptr;
+    const char *skip_verify_str = parsed[5].optval ? parsed[5].optval : nullptr;
+    const char *ca_path_str     = parsed[6].optval ? parsed[6].optval : nullptr;
     const char *user       = dbh->username ? dbh->username : "default";
     const char *pass       = dbh->password ? dbh->password : "";
 
@@ -259,6 +265,7 @@ static int pdo_clickhouse_handle_factory(pdo_dbh_t *dbh, zval *driver_options)
     new (&H->client) std::unique_ptr<clickhouse::Client>();
     new (&H->options) std::unique_ptr<clickhouse::ClientOptions>();
     new (&H->errmsg) std::string();
+    H->ssl_enabled = false;
     H->errcode = 0;
 
     dbh->driver_data = H;
@@ -284,6 +291,23 @@ static int pdo_clickhouse_handle_factory(pdo_dbh_t *dbh, zval *driver_options)
             } else if (comp == "zstd") {
                 opts->SetCompressionMethod(clickhouse::CompressionMethod::ZSTD);
             }
+        }
+
+        /* Parse SSL/TLS options from DSN (required for ClickHouse Cloud) */
+        if (ssl_str && (strcmp(ssl_str, "true") == 0 || strcmp(ssl_str, "1") == 0)) {
+            clickhouse::ClientOptions::SSLOptions ssl_opts;
+            ssl_opts.SetUseDefaultCALocations(true);
+            ssl_opts.SetUseSNI(true);
+
+            if (skip_verify_str && (strcmp(skip_verify_str, "true") == 0 || strcmp(skip_verify_str, "1") == 0)) {
+                ssl_opts.SetSkipVerification(true);
+            }
+            if (ca_path_str) {
+                ssl_opts.SetPathToCADirectory(ca_path_str);
+            }
+
+            opts->SetSSLOptions(std::move(ssl_opts));
+            H->ssl_enabled = true;
         }
 
         H->options = std::move(opts);
