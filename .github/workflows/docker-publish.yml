@@ -6,6 +6,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
+  EXT_CLICKHOUSE_REF: v1.0.3
 
 jobs:
   publish:
@@ -51,7 +52,7 @@ jobs:
           push: true
           build-args: |
             PHP_VERSION=${{ matrix.php-version }}
-            EXT_CLICKHOUSE_REF=${{ steps.meta.outputs.version }}
+            EXT_CLICKHOUSE_REF=${{ env.EXT_CLICKHOUSE_REF }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           tags: |

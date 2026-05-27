@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 ARG EXT_CLICKHOUSE_REPOSITORY=https://github.com/lucasacoutinho/ext-clickhouse.git
-ARG EXT_CLICKHOUSE_REF=main
+ARG EXT_CLICKHOUSE_REF=v1.0.3
 
 # Build ext-clickhouse first (pdo_clickhouse depends on it)
 RUN git clone "${EXT_CLICKHOUSE_REPOSITORY}" ext-clickhouse \
