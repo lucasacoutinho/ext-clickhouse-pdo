@@ -12,10 +12,15 @@ ARG EXT_CLICKHOUSE_REPOSITORY=https://github.com/lucasacoutinho/ext-clickhouse.g
 ARG EXT_CLICKHOUSE_REF=main
 
 # Build ext-clickhouse first (pdo_clickhouse depends on it)
-RUN git clone --recursive "${EXT_CLICKHOUSE_REPOSITORY}" ext-clickhouse \
+RUN git clone "${EXT_CLICKHOUSE_REPOSITORY}" ext-clickhouse \
     && cd ext-clickhouse \
     && git checkout "${EXT_CLICKHOUSE_REF}" \
-    && git submodule update --init --recursive \
+    && git submodule sync --recursive \
+    && for attempt in 1 2 3; do \
+        git submodule update --init --force --depth=1 --recursive && break; \
+        if [ "$attempt" = "3" ]; then exit 1; fi; \
+        sleep $((attempt * 10)); \
+    done \
     && phpize \
     && ./configure --enable-clickhouse \
     && make -j$(nproc) \

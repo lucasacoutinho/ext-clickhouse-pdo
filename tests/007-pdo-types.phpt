@@ -1,7 +1,6 @@
 --TEST--
 PDO ClickHouse: type mapping through PDO
 --EXTENSIONS--
-pdo
 pdo_clickhouse
 clickhouse
 --SKIPIF--

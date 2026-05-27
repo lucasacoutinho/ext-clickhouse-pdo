@@ -1,7 +1,6 @@
 --TEST--
 PDO ClickHouse: prepared statements with emulated parameters
 --EXTENSIONS--
-pdo
 pdo_clickhouse
 clickhouse
 --SKIPIF--

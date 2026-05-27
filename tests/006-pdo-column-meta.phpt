@@ -1,7 +1,6 @@
 --TEST--
 PDO ClickHouse: getColumnMeta() returns ClickHouse type info
 --EXTENSIONS--
-pdo
 pdo_clickhouse
 clickhouse
 --SKIPIF--

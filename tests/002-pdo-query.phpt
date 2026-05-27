@@ -1,7 +1,6 @@
 --TEST--
 PDO ClickHouse: PDO::query() with fetch modes
 --EXTENSIONS--
-pdo
 pdo_clickhouse
 clickhouse
 --SKIPIF--

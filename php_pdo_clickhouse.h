@@ -11,7 +11,7 @@ extern "C" {
 #include "ext/pdo/php_pdo_driver.h"
 }
 
-#define PHP_PDO_CLICKHOUSE_VERSION "1.0.4"
+#define PHP_PDO_CLICKHOUSE_VERSION "1.0.5"
 
 #if PHP_VERSION_ID < 80000
 typedef int zend_result;

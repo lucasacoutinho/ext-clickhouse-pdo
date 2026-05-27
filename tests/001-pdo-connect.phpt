@@ -1,7 +1,6 @@
 --TEST--
 PDO ClickHouse: basic connection and driver name
 --EXTENSIONS--
-pdo
 pdo_clickhouse
 clickhouse
 --SKIPIF--

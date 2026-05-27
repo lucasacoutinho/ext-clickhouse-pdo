@@ -1,7 +1,6 @@
 --TEST--
 PDO ClickHouse: error handling with ERRMODE_EXCEPTION
 --EXTENSIONS--
-pdo
 pdo_clickhouse
 clickhouse
 --SKIPIF--
