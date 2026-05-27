@@ -6,13 +6,49 @@ on:
   pull_request:
 
 jobs:
-  build-and-test:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PDO extension
+        uses: actions/checkout@v6
+
+      - name: Checkout native dependency
+        run: git clone --recursive https://github.com/lucasacoutinho/ext-clickhouse.git ../ext-clickhouse
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          tools: phpize
+          extensions: pdo
+
+      - name: Install C/C++ tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang-format clang-tidy
+
+      - name: Check C/C++ formatting
+        run: git ls-files '*.cpp' '*.h' | xargs clang-format --dry-run --Werror
+
+      - name: Run clang-tidy
+        run: |
+          phpize
+          ./configure --enable-pdo-clickhouse
+          php_includes="$(php-config --includes)"
+          common_args="-std=c++17 -DHAVE_CONFIG_H=1 -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 \
+            -I. -I../ext-clickhouse -I../ext-clickhouse/clickhouse-cpp \
+            -I../ext-clickhouse/clickhouse-cpp/contrib/absl $php_includes"
+          git ls-files '*.cpp' \
+            | while read -r file; do clang-tidy --quiet "$file" -- $common_args; done
+
+  sanitizers:
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['8.1', '8.2', '8.3', '8.4']
+        php-version: ['7.4', '8.5']
 
     services:
       clickhouse:
@@ -26,8 +62,76 @@ jobs:
           --health-retries 10
 
     steps:
-      - name: Checkout
+      - name: Checkout PDO extension
         uses: actions/checkout@v6
+
+      - name: Checkout native dependency
+        run: git clone --recursive https://github.com/lucasacoutinho/ext-clickhouse.git ../ext-clickhouse
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          tools: phpize
+          extensions: pdo
+
+      - name: Build native dependency with ASAN/UBSAN
+        run: |
+          cd ../ext-clickhouse
+          phpize
+          sanitizer_flags="-fsanitize=address,undefined -fno-omit-frame-pointer -O1 -g"
+          CFLAGS="$sanitizer_flags" \
+          CXXFLAGS="$sanitizer_flags" \
+          LDFLAGS="-fsanitize=address,undefined" \
+            ./configure --enable-clickhouse
+          make -j"$(nproc)"
+          sudo make install
+          echo "extension=clickhouse" | sudo tee "$(php -r 'echo php_ini_scanned_dir();')/20-clickhouse.ini"
+
+      - name: Build and test PDO driver with ASAN/UBSAN
+        env:
+          CLICKHOUSE_HOST: 127.0.0.1
+          CLICKHOUSE_PORT: '9000'
+        run: |
+          phpize
+          sanitizer_flags="-fsanitize=address,undefined -fno-omit-frame-pointer -O1 -g"
+          CFLAGS="$sanitizer_flags" \
+          CXXFLAGS="$sanitizer_flags" \
+          LDFLAGS="-fsanitize=address,undefined" \
+            ./configure --enable-pdo-clickhouse
+          make -j"$(nproc)"
+          asan_lib="$(cc -print-file-name=libasan.so)"
+          USE_ZEND_ALLOC=0 \
+          LD_PRELOAD="$asan_lib" \
+          ASAN_OPTIONS="detect_leaks=0:abort_on_error=1" \
+          UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1" \
+            php run-tests.php -d extension=modules/pdo_clickhouse.so --show-diff -q tests/*.phpt
+
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5']
+
+    services:
+      clickhouse:
+        image: clickhouse/clickhouse-server:24
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "clickhouse-client --query 'SELECT 1'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout PDO extension
+        uses: actions/checkout@v6
+
+      - name: Checkout native dependency
+        run: git clone --recursive https://github.com/lucasacoutinho/ext-clickhouse.git ../ext-clickhouse
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -37,10 +141,7 @@ jobs:
           extensions: pdo
 
       - name: Build ext-clickhouse (dependency)
-        env:
-          GH_TOKEN: ${{ secrets.EXT_CLICKHOUSE_TOKEN }}
         run: |
-          git clone --recursive https://x-access-token:${GH_TOKEN}@github.com/lightprofco/ext-clickhouse.git ../ext-clickhouse
           cd ../ext-clickhouse
           phpize
           ./configure --enable-clickhouse

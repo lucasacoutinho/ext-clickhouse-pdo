@@ -4,7 +4,7 @@ PHP_ARG_ENABLE([pdo-clickhouse],
   [for ClickHouse PDO driver],
   [AS_HELP_STRING([--enable-pdo-clickhouse],
     [Enable ClickHouse PDO driver (requires ext-clickhouse)])],
-  [no])
+  [yes])
 
 if test "$PHP_PDO_CLICKHOUSE" != "no"; then
 
@@ -15,15 +15,21 @@ if test "$PHP_PDO_CLICKHOUSE" != "no"; then
     ext_srcdir="."
   fi
 
-  dnl Require ext-clickhouse headers
+  dnl Prefer the sibling checkout for development, otherwise use headers
+  dnl installed by ext-clickhouse through PHP_INSTALL_HEADERS.
   CLICKHOUSE_EXT_DIR="$ext_srcdir/../ext-clickhouse"
-  if test ! -f "$CLICKHOUSE_EXT_DIR/php_clickhouse.h"; then
-    AC_MSG_ERROR([ext-clickhouse headers not found at $CLICKHOUSE_EXT_DIR])
+  if test -f "$CLICKHOUSE_EXT_DIR/php_clickhouse.h"; then
+    CLICKHOUSE_CPP_DIR="$CLICKHOUSE_EXT_DIR/clickhouse-cpp"
+  elif test -f "$phpincludedir/ext/clickhouse/php_clickhouse.h"; then
+    CLICKHOUSE_EXT_DIR="$phpincludedir/ext/clickhouse"
+    CLICKHOUSE_CPP_DIR="$CLICKHOUSE_EXT_DIR/clickhouse-cpp"
+  else
+    AC_MSG_ERROR([ext-clickhouse headers not found. Install ext-clickhouse first or keep ../ext-clickhouse as a sibling checkout])
   fi
 
   PHP_ADD_INCLUDE([$CLICKHOUSE_EXT_DIR])
-  PHP_ADD_INCLUDE([$CLICKHOUSE_EXT_DIR/clickhouse-cpp])
-  PHP_ADD_INCLUDE([$CLICKHOUSE_EXT_DIR/clickhouse-cpp/contrib/absl])
+  PHP_ADD_INCLUDE([$CLICKHOUSE_CPP_DIR])
+  PHP_ADD_INCLUDE([$CLICKHOUSE_CPP_DIR/contrib/absl])
 
   PHP_REQUIRE_CXX()
   PHP_CXX_COMPILE_STDCXX([17], [mandatory], [PHP_PDO_CLICKHOUSE_STDCXX])

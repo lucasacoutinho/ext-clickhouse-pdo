@@ -1,4 +1,4 @@
-ARG PHP_VERSION=8.4
+ARG PHP_VERSION=8.5
 
 # --- Stage 1: Build ---
 FROM php:${PHP_VERSION}-cli AS builder
@@ -8,12 +8,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
+ARG EXT_CLICKHOUSE_REPOSITORY=https://github.com/lucasacoutinho/ext-clickhouse.git
+ARG EXT_CLICKHOUSE_REF=main
 
 # Build ext-clickhouse first (pdo_clickhouse depends on it)
-RUN --mount=type=secret,id=gh_token \
-    GH_TOKEN=$(cat /run/secrets/gh_token) \
-    && git clone --recursive https://x-access-token:${GH_TOKEN}@github.com/lightprofco/ext-clickhouse.git ext-clickhouse \
+RUN git clone --recursive "${EXT_CLICKHOUSE_REPOSITORY}" ext-clickhouse \
     && cd ext-clickhouse \
+    && git checkout "${EXT_CLICKHOUSE_REF}" \
+    && git submodule update --init --recursive \
     && phpize \
     && ./configure --enable-clickhouse \
     && make -j$(nproc) \

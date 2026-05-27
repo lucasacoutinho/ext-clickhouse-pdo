@@ -1,0 +1,15 @@
+---
+Checks: >
+  -*,
+  clang-analyzer-*,
+  bugprone-*,
+  performance-*,
+  portability-*,
+  readability-redundant-*,
+  modernize-use-nullptr
+WarningsAsErrors: ''
+HeaderFilterRegex: '^(pdo_clickhouse|php_pdo_clickhouse|clickhouse_)'
+SystemHeaders: false
+CheckOptions:
+  - key: bugprone-easily-swappable-parameters.MinimumLength
+    value: '4'

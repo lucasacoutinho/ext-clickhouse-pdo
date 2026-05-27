@@ -1,0 +1,19 @@
+{
+  "name": "lucasacoutinho/ext-clickhouse-pdo",
+  "description": "PDO driver for ClickHouse using the native TCP protocol.",
+  "type": "php-ext",
+  "license": "MIT",
+  "require": {
+    "php": ">=7.4 <8.6",
+    "ext-pdo": "*",
+    "ext-clickhouse": "*"
+  },
+  "php-ext": {
+    "extension-name": "pdo_clickhouse",
+    "priority": 30,
+    "support-zts": true,
+    "support-nts": true,
+    "download-url-method": ["pre-packaged-source"],
+    "os-families-exclude": ["windows"]
+  }
+}

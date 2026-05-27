@@ -8,6 +8,9 @@ clickhouse
 <?php
 require __DIR__ . '/pdo_clickhouse_test.inc';
 pdo_clickhouse_test_skip();
+if (PHP_VERSION_ID < 80100) {
+    die('skip PHP 7.4/8.0 PDO fetch API cannot return typed zvals');
+}
 ?>
 --FILE--
 <?php

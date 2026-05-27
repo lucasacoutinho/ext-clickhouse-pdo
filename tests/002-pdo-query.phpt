@@ -18,36 +18,36 @@ $pdo = pdo_clickhouse_test_pdo();
 // FETCH_ASSOC
 $stmt = $pdo->query("SELECT 1 AS id, 'hello' AS name");
 $row = $stmt->fetch(PDO::FETCH_ASSOC);
-var_dump($row['id']);
-var_dump($row['name']);
+echo $row['id'], "\n";
+echo $row['name'], "\n";
 
 // FETCH_NUM
 $stmt = $pdo->query("SELECT 42, 'world'");
 $row = $stmt->fetch(PDO::FETCH_NUM);
-var_dump($row[0]);
-var_dump($row[1]);
+echo $row[0], "\n";
+echo $row[1], "\n";
 
 // FETCH_OBJ
 $stmt = $pdo->query("SELECT 99 AS val");
 $row = $stmt->fetch(PDO::FETCH_OBJ);
-var_dump($row->val);
+echo $row->val, "\n";
 
 // Multiple rows
 $stmt = $pdo->query("SELECT number FROM system.numbers LIMIT 3");
 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-var_dump(count($rows));
-var_dump($rows[0]['number']);
-var_dump($rows[2]['number']);
+echo count($rows), "\n";
+echo $rows[0]['number'], "\n";
+echo $rows[2]['number'], "\n";
 
 echo "OK\n";
 ?>
 --EXPECT--
-int(1)
-string(5) "hello"
-int(42)
-string(5) "world"
-int(99)
-int(3)
-int(0)
-int(2)
+1
+hello
+42
+world
+99
+3
+0
+2
 OK
