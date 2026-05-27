@@ -277,6 +277,9 @@ static int clickhouse_stmt_describe(pdo_stmt_t *stmt, int colno)
         zend_string_init(S->col_names[colno].c_str(), S->col_names[colno].size(), 0);
     stmt->columns[colno].maxlen = SIZE_MAX;
     stmt->columns[colno].precision = 0;
+#if PHP_VERSION_ID < 80100
+    stmt->columns[colno].param_type = PDO_PARAM_STR;
+#endif
 
     return 1;
 }
