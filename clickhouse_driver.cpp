@@ -102,8 +102,14 @@ void pdo_clickhouse_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt, int errcode, const c
     auto *H = static_cast<pdo_clickhouse_db_handle *>(dbh->driver_data);
     pdo_error_type *pdo_err = stmt ? &stmt->error_code : &dbh->error_code;
 
-    H->errcode = errcode;
-    H->errmsg = errmsg ? errmsg : "";
+    if (stmt && stmt->driver_data) {
+        auto *S = static_cast<pdo_clickhouse_stmt *>(stmt->driver_data);
+        S->errcode = errcode;
+        S->errmsg = errmsg ? errmsg : "";
+    } else {
+        H->errcode = errcode;
+        H->errmsg = errmsg ? errmsg : "";
+    }
 
     if (sqlstate) {
         strncpy(*pdo_err, sqlstate, sizeof(*pdo_err));
@@ -126,7 +132,11 @@ void pdo_clickhouse_clear_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt)
     auto *H = static_cast<pdo_clickhouse_db_handle *>(dbh->driver_data);
     pdo_error_type *pdo_err = stmt ? &stmt->error_code : &dbh->error_code;
 
-    if (H) {
+    if (stmt && stmt->driver_data) {
+        auto *S = static_cast<pdo_clickhouse_stmt *>(stmt->driver_data);
+        S->errcode = 0;
+        S->errmsg.clear();
+    } else if (H) {
         H->errcode = 0;
         H->errmsg.clear();
     }
@@ -166,12 +176,14 @@ static bool clickhouse_handle_preparer_impl(pdo_dbh_t *dbh, const char *sql, siz
     new (&S->col_names) std::vector<std::string>();
     new (&S->col_type_names) std::vector<std::string>();
     new (&S->block_row_offsets) std::vector<size_t>();
+    new (&S->errmsg) std::string();
 
     S->H = H;
     S->total_rows = 0;
     S->current_row = 0;
     S->executed = false;
     S->affected_rows = 0;
+    S->errcode = 0;
 
     stmt->driver_data = S;
     stmt->methods = &clickhouse_stmt_methods;
@@ -205,9 +217,13 @@ static zend_long clickhouse_handle_doer_impl(pdo_dbh_t *dbh, const char *sql, si
 
     try {
         clickhouse::Query q(std::string(sql, sql_len));
+        zend_long affected_rows = 0;
+        q.OnProgress([&](const clickhouse::Progress &progress) {
+            pdo_clickhouse_accumulate_written_rows(affected_rows, progress.written_rows);
+        });
         H->client->Execute(q);
         pdo_clickhouse_clear_error(dbh, nullptr);
-        return 0; /* ClickHouse doesn't report affected rows for DDL */
+        return affected_rows;
     } catch (const clickhouse::ServerException &e) {
         pdo_clickhouse_error(dbh, nullptr, e.GetCode(), e.what(), "HY000");
         return -1;
@@ -393,9 +409,18 @@ static void clickhouse_fetch_error_func(pdo_dbh_t *dbh, pdo_stmt_t *stmt, zval *
 #endif
 {
     auto *H = static_cast<pdo_clickhouse_db_handle *>(dbh->driver_data);
-    if (H->errcode) {
-        add_next_index_long(info, static_cast<zend_long>(H->errcode));
-        add_next_index_string(info, H->errmsg.c_str());
+    int errcode = H->errcode;
+    const std::string *errmsg = &H->errmsg;
+
+    if (stmt && stmt->driver_data) {
+        auto *S = static_cast<pdo_clickhouse_stmt *>(stmt->driver_data);
+        errcode = S->errcode;
+        errmsg = &S->errmsg;
+    }
+
+    if (errcode) {
+        add_next_index_long(info, static_cast<zend_long>(errcode));
+        add_next_index_string(info, errmsg->c_str());
 #if PHP_VERSION_ID < 80100
         return 1;
 #endif

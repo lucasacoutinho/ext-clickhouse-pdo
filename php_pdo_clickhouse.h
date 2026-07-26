@@ -11,7 +11,7 @@ extern "C" {
 #include "ext/pdo/php_pdo_driver.h"
 }
 
-#define PHP_PDO_CLICKHOUSE_VERSION "1.0.7"
+#define PHP_PDO_CLICKHOUSE_VERSION "1.1.0"
 
 #if PHP_VERSION_ID < 80000
 typedef int zend_result;
@@ -65,7 +65,20 @@ struct pdo_clickhouse_stmt
 
     bool executed;
     zend_long affected_rows;
+
+    /* Extended errors belong to the statement that produced them. */
+    int errcode;
+    std::string errmsg;
 };
+
+static inline void pdo_clickhouse_accumulate_written_rows(zend_long &total, uint64_t written_rows)
+{
+    if (written_rows > static_cast<uint64_t>(ZEND_LONG_MAX - total)) {
+        total = ZEND_LONG_MAX;
+    } else {
+        total += static_cast<zend_long>(written_rows);
+    }
+}
 
 /* Method tables */
 extern const struct pdo_dbh_methods clickhouse_dbh_methods;

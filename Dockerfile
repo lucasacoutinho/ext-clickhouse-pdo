@@ -4,12 +4,13 @@ ARG PHP_VERSION=8.5
 FROM php:${PHP_VERSION}-cli AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    autoconf g++ make git \
+    autoconf g++ make git libssl-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 ARG EXT_CLICKHOUSE_REPOSITORY=https://github.com/lucasacoutinho/ext-clickhouse.git
-ARG EXT_CLICKHOUSE_REF=v1.0.3
+ARG EXT_CLICKHOUSE_REF=v1.1.0
+COPY tools/verify-native-runtime.php /build/verify-native-runtime.php
 
 # Build ext-clickhouse first (pdo_clickhouse depends on it)
 RUN git clone "${EXT_CLICKHOUSE_REPOSITORY}" ext-clickhouse \
@@ -24,7 +25,8 @@ RUN git clone "${EXT_CLICKHOUSE_REPOSITORY}" ext-clickhouse \
     && phpize \
     && ./configure --enable-clickhouse \
     && make -j$(nproc) \
-    && make install
+    && make install \
+    && php -d extension=clickhouse /build/verify-native-runtime.php
 
 # Build pdo_clickhouse
 COPY . ext-pdo-clickhouse/

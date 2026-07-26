@@ -13,7 +13,7 @@ CI builds and tests the driver on PHP 7.4, 8.0, 8.1, 8.2, 8.3, 8.4, and 8.5.
 
 `pdo_clickhouse` uses headers installed by `ext-clickhouse`. A sibling `../ext-clickhouse` checkout is still supported for local development, but users should install the native extension first.
 
-PDO releases depend on `ext-clickhouse` releases, not directly on `clickhouse-cpp`. Release images pin the native extension ref instead of building from a floating branch.
+PDO releases depend on `ext-clickhouse` releases, not directly on `clickhouse-cpp`. Release images pin the native extension ref instead of building from a floating branch. The image build also verifies the required native reflection and value-validation contract, so an obsolete or incorrectly tagged native release cannot be published silently.
 
 ## Build
 

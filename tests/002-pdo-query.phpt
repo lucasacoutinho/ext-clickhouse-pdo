@@ -38,6 +38,15 @@ echo count($rows), "\n";
 echo $rows[0]['number'], "\n";
 echo $rows[2]['number'], "\n";
 
+// Leading tracing comments must not hide result sets from the driver.
+$stmt = $pdo->query("/* trace_id=abc123 */ SELECT 7 AS traced");
+echo $stmt->fetchColumn(), "\n";
+echo $stmt->columnCount(), "\n";
+
+$stmt = $pdo->query("-- injected trace comment\nSELECT 8 AS traced");
+echo $stmt->fetchColumn(), "\n";
+echo $stmt->columnCount(), "\n";
+
 echo "OK\n";
 ?>
 --EXPECT--
@@ -49,4 +58,8 @@ world
 3
 0
 2
+7
+1
+8
+1
 OK

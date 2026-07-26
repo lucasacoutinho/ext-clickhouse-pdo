@@ -26,6 +26,25 @@ try {
 $pdo->query('SELECT 1');
 var_dump($pdo->errorInfo()[0]);
 
+// Extended error data must stay attached to the statement that failed.
+$first = $pdo->prepare('SELECT * FROM _nonexistent_statement_error_one');
+try {
+    $first->execute();
+} catch (PDOException $e) {
+}
+$firstError = $first->errorInfo();
+
+$pdo->query('SELECT 2');
+$second = $pdo->prepare('SELECT * FROM _nonexistent_statement_error_two');
+try {
+    $second->execute();
+} catch (PDOException $e) {
+}
+$preservedError = $first->errorInfo();
+var_dump($preservedError[1] === $firstError[1]);
+var_dump($preservedError[2] === $firstError[2]);
+var_dump($second->errorInfo()[2] !== $firstError[2]);
+
 // Quote function
 $quoted = $pdo->quote("it's a test");
 var_dump($quoted);
@@ -64,6 +83,9 @@ Caught PDOException
 bool(true)
 bool(true)
 string(5) "00000"
+bool(true)
+bool(true)
+bool(true)
 string(%d) "'it\'s a test'"
 000
 bool(false)

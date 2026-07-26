@@ -124,6 +124,79 @@ static void clickhouse_stmt_set_column_count(pdo_stmt_t *stmt, int column_count)
 #endif
 }
 
+static size_t clickhouse_skip_sql_trivia(const std::string &sql, size_t pos)
+{
+    while (pos < sql.size()) {
+        while (pos < sql.size() && std::isspace(static_cast<unsigned char>(sql[pos]))) {
+            pos++;
+        }
+
+        if (sql.compare(pos, 2, "/*") == 0) {
+            size_t end = sql.find("*/", pos + 2);
+            if (end == std::string::npos) {
+                return sql.size();
+            }
+            pos = end + 2;
+            continue;
+        }
+
+        if (sql.compare(pos, 2, "--") == 0 || sql[pos] == '#') {
+            size_t end = sql.find_first_of("\r\n", pos + (sql[pos] == '#' ? 1 : 2));
+            if (end == std::string::npos) {
+                return sql.size();
+            }
+            pos = end + 1;
+            continue;
+        }
+
+        break;
+    }
+
+    return pos;
+}
+
+static bool clickhouse_sql_keyword_at(const std::string &sql, size_t pos, const char *keyword)
+{
+    size_t length = strlen(keyword);
+    if (pos + length > sql.size())
+        return false;
+
+    for (size_t i = 0; i < length; ++i) {
+        if (std::toupper(static_cast<unsigned char>(sql[pos + i])) != keyword[i]) {
+            return false;
+        }
+    }
+
+    if (pos + length < sql.size()) {
+        unsigned char next = static_cast<unsigned char>(sql[pos + length]);
+        if (std::isalnum(next) || next == '_') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool clickhouse_query_returns_rows(const std::string &sql)
+{
+    size_t pos = clickhouse_skip_sql_trivia(sql, 0);
+
+    while (pos < sql.size() && sql[pos] == '(') {
+        pos = clickhouse_skip_sql_trivia(sql, pos + 1);
+    }
+
+    static constexpr const char *result_keywords[] = {
+        "SELECT", "SHOW", "DESCRIBE", "EXPLAIN", "EXISTS", "WITH",
+    };
+    for (const char *keyword : result_keywords) {
+        if (clickhouse_sql_keyword_at(sql, pos, keyword)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static int clickhouse_stmt_dtor(pdo_stmt_t *stmt)
 {
     auto *S = static_cast<pdo_clickhouse_stmt *>(stmt->driver_data);
@@ -134,6 +207,7 @@ static int clickhouse_stmt_dtor(pdo_stmt_t *stmt)
         S->col_names.~vector();
         S->col_type_names.~vector();
         S->block_row_offsets.~vector();
+        S->errmsg.~basic_string();
         efree(S);
         stmt->driver_data = nullptr;
     }
@@ -170,37 +244,17 @@ static int clickhouse_stmt_execute(pdo_stmt_t *stmt)
 
     std::string query_str(sql, sql_len);
 
-    /* Detect SELECT-like queries */
-    std::string upper = query_str;
-    for (auto &c : upper)
-        c = toupper(c);
-    size_t start = upper.find_first_not_of(" \t\n\r");
-    /* Skip leading parentheses for union queries: (SELECT ...) UNION ALL ... */
-    size_t check = start;
-    if (check != std::string::npos) {
-        while (check < upper.size() && upper[check] == '(')
-            check++;
-        while (check < upper.size() && (upper[check] == ' ' || upper[check] == '\t'))
-            check++;
-    }
-    bool is_select =
-        (check != std::string::npos && check < upper.size()) &&
-        (upper.compare(check, 6, "SELECT") == 0 || upper.compare(check, 4, "SHOW") == 0 ||
-         upper.compare(check, 8, "DESCRIBE") == 0 || upper.compare(check, 7, "EXPLAIN") == 0 ||
-         upper.compare(check, 6, "EXISTS") == 0 || upper.compare(check, 4, "WITH") == 0);
+    bool is_select = clickhouse_query_returns_rows(query_str);
 
     try {
         if (is_select) {
             /* SELECT: buffer all blocks */
-            bool first_block = true;
+            bool schema_recorded = false;
 
             clickhouse::Query q(query_str);
             q.OnData([&](const clickhouse::Block &block) {
-                if (block.GetRowCount() == 0)
-                    return;
-
-                if (first_block) {
-                    first_block = false;
+                if (!schema_recorded && block.GetColumnCount() > 0) {
+                    schema_recorded = true;
                     for (size_t c = 0; c < block.GetColumnCount(); ++c) {
                         S->col_names.push_back(block.GetColumnName(c));
                         S->col_type_names.push_back(block[c]->Type()->GetName());
@@ -208,6 +262,9 @@ static int clickhouse_stmt_execute(pdo_stmt_t *stmt)
                     clickhouse_stmt_set_column_count(stmt,
                                                      static_cast<int>(block.GetColumnCount()));
                 }
+
+                if (block.GetRowCount() == 0)
+                    return;
 
                 size_t block_idx = S->blocks.size();
                 size_t rows = block.GetRowCount();
@@ -223,7 +280,7 @@ static int clickhouse_stmt_execute(pdo_stmt_t *stmt)
 
             H->client->Execute(q);
 
-            if (first_block) {
+            if (!schema_recorded) {
                 clickhouse_stmt_set_column_count(stmt, 0);
             }
             stmt->row_count = static_cast<zend_long>(S->total_rows);
@@ -233,7 +290,7 @@ static int clickhouse_stmt_execute(pdo_stmt_t *stmt)
             /* Non-SELECT: execute as text */
             clickhouse::Query q(query_str);
             q.OnProgress([&](const clickhouse::Progress &p) {
-                S->affected_rows = static_cast<zend_long>(p.written_rows);
+                pdo_clickhouse_accumulate_written_rows(S->affected_rows, p.written_rows);
             });
             H->client->Execute(q);
 
