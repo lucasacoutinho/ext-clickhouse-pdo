@@ -11,7 +11,7 @@ jobs:
 
     steps:
       - name: Checkout PDO extension
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Checkout native dependency
         run: |
@@ -74,7 +74,7 @@ jobs:
 
     steps:
       - name: Checkout PDO extension
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Checkout native dependency
         run: |
@@ -168,7 +168,7 @@ jobs:
 
     steps:
       - name: Checkout PDO extension
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Checkout native dependency
         run: |
@@ -271,7 +271,7 @@ jobs:
 
     steps:
       - name: Checkout PDO extension
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Checkout native dependency
         run: |
