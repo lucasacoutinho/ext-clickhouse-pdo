@@ -30,7 +30,7 @@ extern const pdo_driver_t pdo_clickhouse_driver;
 #include <string>
 #include <vector>
 
-/* Per-connection driver data — stored in pdo_dbh_t->driver_data */
+/* Per-connection driver data stored in pdo_dbh_t->driver_data. */
 struct pdo_clickhouse_db_handle
 {
     std::unique_ptr<clickhouse::Client> client;
@@ -45,7 +45,7 @@ struct pdo_clickhouse_db_handle
     std::string errmsg;
 };
 
-/* Per-statement driver data — stored in pdo_stmt_t->driver_data */
+/* Per-statement driver data stored in pdo_stmt_t->driver_data. */
 struct pdo_clickhouse_stmt
 {
     pdo_clickhouse_db_handle *H; /* back-reference to connection */
