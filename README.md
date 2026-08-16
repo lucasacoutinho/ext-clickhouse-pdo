@@ -5,7 +5,7 @@ A PDO driver for ClickHouse using the native TCP protocol (port 9000). Built on 
 ## Requirements
 
 - PHP 7.4, 8.0, 8.1, 8.2, 8.3, 8.4, or 8.5
-- [ext-clickhouse](https://github.com/lucasacoutinho/ext-clickhouse) (must be installed first)
+- [ext-clickhouse](https://github.com/lucasacoutinho/ext-clickhouse) 1.3.x (must be installed first)
 
 ## PHP version support
 
@@ -13,7 +13,7 @@ CI builds and tests the driver on PHP 7.4, 8.0, 8.1, 8.2, 8.3, 8.4, and 8.5.
 
 `pdo_clickhouse` uses headers installed by `ext-clickhouse`. A sibling `../ext-clickhouse` checkout is still supported for local development, but users should install the native extension first.
 
-PDO releases depend on `ext-clickhouse` releases, not directly on `clickhouse-cpp`. Release images pin the native extension ref instead of building from a floating branch. The image build also verifies the required native reflection and value-validation contract, so an obsolete or incorrectly tagged native release cannot be published silently.
+The two extensions share native C++ types, so their minor release lines must match: `pdo_clickhouse` 1.3.x requires `ext-clickhouse` 1.3.x. Composer enforces that pairing, and release images pin the native extension ref instead of building from a floating branch. The image build also verifies the required native reflection and value-validation contract, so an obsolete or incorrectly tagged native release cannot be published silently.
 
 ## Build
 

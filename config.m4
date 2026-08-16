@@ -34,6 +34,9 @@ if test "$PHP_PDO_CLICKHOUSE" != "no"; then
   PHP_REQUIRE_CXX()
   PHP_CXX_COMPILE_STDCXX([17], [mandatory], [PHP_PDO_CLICKHOUSE_STDCXX])
 
+  dnl Match the BigNum ABI used by the paired ext-clickhouse 1.3.x release.
+  PDO_CLICKHOUSE_BIGNUM_FLAGS="-DCH_USE_ABSEIL_FOR_BIGNUM=1"
+
   dnl Detect OpenSSL (must match ext-clickhouse build)
   PKG_CHECK_MODULES([OPENSSL], [openssl >= 1.1.0], [
     PDO_CLICKHOUSE_OPENSSL_FLAGS="-DWITH_OPENSSL=1"
@@ -44,7 +47,7 @@ if test "$PHP_PDO_CLICKHOUSE" != "no"; then
   PHP_NEW_EXTENSION([pdo_clickhouse],
     [pdo_clickhouse.cpp clickhouse_driver.cpp clickhouse_statement.cpp],
     [$ext_shared],,
-    [$PHP_PDO_CLICKHOUSE_STDCXX -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 $PDO_CLICKHOUSE_OPENSSL_FLAGS],
+    [$PHP_PDO_CLICKHOUSE_STDCXX -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 $PDO_CLICKHOUSE_BIGNUM_FLAGS $PDO_CLICKHOUSE_OPENSSL_FLAGS],
     [cxx])
 
   PHP_ADD_LIBRARY(stdc++, 1, PDO_CLICKHOUSE_SHARED_LIBADD)
