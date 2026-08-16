@@ -47,7 +47,8 @@ jobs:
           phpize
           ./configure --enable-pdo-clickhouse
           php_includes="$(php-config --includes)"
-          common_args="-std=c++17 -DHAVE_CONFIG_H=1 -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 \
+          common_args="-std=c++17 -DHAVE_CONFIG_H=1 -DCH_USE_ABSEIL_FOR_BIGNUM=1 \
+            -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 \
             -I. -I../ext-clickhouse -I../ext-clickhouse/clickhouse-cpp \
             -I../ext-clickhouse/clickhouse-cpp/contrib/absl $php_includes"
           git ls-files '*.cpp' \

@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 ARG EXT_CLICKHOUSE_REPOSITORY=https://github.com/lucasacoutinho/ext-clickhouse.git
-ARG EXT_CLICKHOUSE_REF=v1.2.0
+ARG EXT_CLICKHOUSE_REF=v1.3.0
 COPY tools/verify-native-runtime.php /build/verify-native-runtime.php
 
 # Build ext-clickhouse first (pdo_clickhouse depends on it)
