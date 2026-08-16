@@ -119,7 +119,7 @@ void pdo_clickhouse_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt, int errcode, const c
     }
 
     /* During factory (dbh->methods not yet set), PDO core cannot fetch
-     * driver error info — throw a PDOException directly so the real
+     * driver error info. Throw a PDOException directly so the real
      * message reaches userland instead of generic "Constructor failed". */
     if (!dbh->methods) {
         pdo_throw_exception(static_cast<unsigned int>(errcode),
@@ -551,7 +551,7 @@ static int pdo_clickhouse_handle_factory(pdo_dbh_t *dbh, zval *driver_options)
     const char *user = dbh->username ? dbh->username : "default";
     const char *pass = dbh->password ? dbh->password : "";
 
-    /* Allocate driver handle — respecting is_persistent */
+    /* Allocate the driver handle while respecting is_persistent. */
     auto *H = static_cast<pdo_clickhouse_db_handle *>(
         pecalloc(1, sizeof(pdo_clickhouse_db_handle), dbh->is_persistent));
 
