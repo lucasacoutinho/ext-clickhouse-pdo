@@ -76,6 +76,9 @@ foreach (["repeat('x', 1000)", "[repeat('x', 1000)]",
 $pdo = limited_pdo('max_buffered_bytes=4096');
 var_dump(strlen($pdo->query("SELECT repeat('x', 1000)")->fetchColumn()) === 1000);
 
+$pdo = limited_pdo('max_buffered_bytes=46');
+var_dump(count($pdo->query("SELECT CAST([], 'Array(LowCardinality(String))') AS v")->fetchAll()) === 1);
+
 foreach ([PDO::ERRMODE_SILENT, PDO::ERRMODE_WARNING] as $mode) {
     $pdo = limited_pdo('max_buffered_rows=2', $mode);
     set_error_handler(function () { return true; });
@@ -101,6 +104,7 @@ try {
 var_dump(check_reuse($pdo));
 ?>
 --EXPECT--
+bool(true)
 bool(true)
 bool(true)
 bool(true)

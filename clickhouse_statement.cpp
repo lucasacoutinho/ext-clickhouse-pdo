@@ -93,7 +93,9 @@ class clickhouse_result_budget final : public clickhouse::OutputStream
         case Type::Array: {
             const auto array = column->As<ColumnArray>();
             array->GetOffsets()->SaveBody(this);
-            consume_body(array->GetData());
+            if (array->GetData()->Size() > 0) {
+                consume_body(array->GetData());
+            }
             break;
         }
         case Type::Tuple: {
@@ -108,7 +110,10 @@ class clickhouse_result_budget final : public clickhouse::OutputStream
                 const auto map = column->As<ColumnMap>();
                 for (size_t row = 0; row < map->Size() && !exceeded_; ++row) {
                     if (consume(sizeof(uint64_t))) {
-                        consume_body(map->GetAsColumn(row));
+                        const auto entries = map->GetAsColumn(row);
+                        if (entries->Size() > 0) {
+                            consume_body(entries);
+                        }
                     }
                 }
                 break;
