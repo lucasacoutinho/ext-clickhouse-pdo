@@ -6,7 +6,7 @@ on:
   pull_request:
 
 env:
-  EXT_CLICKHOUSE_REF: v1.4.1
+  EXT_CLICKHOUSE_REF: v1.5.0
 
 jobs:
   quality:

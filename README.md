@@ -47,6 +47,33 @@ $rows = $pdo
 The driver uses ClickHouse's native TCP port, usually `9000`. It does not use
 the HTTP interface.
 
+SELECT results are buffered before PDO fetches rows. The driver rejects a result
+that exceeds either connection limit:
+
+| DSN option | Default | Measures |
+| --- | --- | --- |
+| `max_buffered_rows` | `1000000` | Rows in one result |
+| `max_buffered_bytes` | `67108864` (64 MiB) | Uncompressed serialized column values and result schema |
+
+Both options accept decimal digits representing a positive integer no greater
+than `PHP_INT_MAX`. For example:
+
+```php
+$pdo = new PDO('clickhouse:host=127.0.0.1;max_buffered_rows=10000;max_buffered_bytes=8388608');
+```
+
+Exceeding a limit cancels and drains the query, discards its partial result, and
+reports a PDO error. The connection can then execute another query. These limits
+apply separately to each buffered statement; they do not silently truncate data.
+
+The byte budget includes nested values and LowCardinality dictionaries. It is
+not a limit on PHP process memory: native object overhead, other statements,
+and the incoming block decoded by clickhouse-cpp are outside that budget. Use
+ClickHouse server limits such as `max_result_bytes` with
+`result_overflow_mode='throw'` to restrict results before they reach the client.
+Connections must use a trusted server; this driver does not impose allocation
+limits on the upstream protocol decoder.
+
 ## Requirements
 
 | Component | Supported version |
@@ -64,11 +91,12 @@ the same C++ types at runtime. The minor release lines must match.
 
 | `pdo_clickhouse` | `ext-clickhouse` |
 | --- | --- |
+| 1.5.x | 1.5.x |
 | 1.4.x | 1.4.x |
 | 1.3.x | 1.3.x |
 | 1.2.x | 1.2.x |
 
-Composer enforces the 1.4.x pairing for the current release. Published Docker
+Composer enforces the 1.5.x pairing for the current release. Published Docker
 images also pin the matching native extension tag and verify its runtime API
 before they build PDO.
 
@@ -148,7 +176,7 @@ make install
 Versioned and rolling images are published for each supported PHP release:
 
 ```bash
-docker pull ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-v1.4.1
+docker pull ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-v1.5.0
 docker pull ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-latest
 ```
 
