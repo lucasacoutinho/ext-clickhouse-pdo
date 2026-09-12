@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+env:
+  EXT_CLICKHOUSE_REF: v1.4.0
+
 jobs:
   quality:
     runs-on: ubuntu-latest
@@ -15,7 +18,7 @@ jobs:
 
       - name: Checkout native dependency
         run: |
-          git clone --depth=1 https://github.com/lucasacoutinho/ext-clickhouse.git ../ext-clickhouse
+          git clone --branch "$EXT_CLICKHOUSE_REF" --depth=1 https://github.com/lucasacoutinho/ext-clickhouse.git ../ext-clickhouse
           cd ../ext-clickhouse
           git submodule sync --recursive
           for attempt in 1 2 3; do
@@ -47,7 +50,7 @@ jobs:
           phpize
           ./configure --enable-pdo-clickhouse
           php_includes="$(php-config --includes)"
-          common_args="-std=c++17 -DHAVE_CONFIG_H=1 -DCH_USE_ABSEIL_FOR_BIGNUM=1 \
+          common_args="-std=c++17 -DHAVE_CONFIG_H=1 -DCH_USE_ABSEIL_FOR_BIGNUM=1 -DCH_MAP_BOOL_TO_UINT8=0 -DCH_NON_OPTIONAL_CURRENT_ENDPOINT=0 \
             -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 \
             -I. -I../ext-clickhouse -I../ext-clickhouse/clickhouse-cpp \
             -I../ext-clickhouse/clickhouse-cpp/contrib/absl $php_includes"
@@ -79,7 +82,7 @@ jobs:
 
       - name: Checkout native dependency
         run: |
-          git clone --depth=1 https://github.com/lucasacoutinho/ext-clickhouse.git ../ext-clickhouse
+          git clone --branch "$EXT_CLICKHOUSE_REF" --depth=1 https://github.com/lucasacoutinho/ext-clickhouse.git ../ext-clickhouse
           cd ../ext-clickhouse
           git submodule sync --recursive
           for attempt in 1 2 3; do
@@ -145,8 +148,9 @@ jobs:
           )
           if [ "${{ matrix.php-version }}" != "7.4" ] && [ "${{ matrix.php-version }}" != "8.0" ]; then
             asan_lib="$(cc -print-file-name=libasan.so)"
+            cxx_lib="$(c++ -print-file-name=libstdc++.so)"
             run_env+=(
-              LD_PRELOAD="$asan_lib"
+              LD_PRELOAD="$asan_lib:$cxx_lib"
               ASAN_OPTIONS="detect_leaks=0:abort_on_error=1"
             )
           fi
@@ -173,7 +177,7 @@ jobs:
 
       - name: Checkout native dependency
         run: |
-          git clone --depth=1 https://github.com/lucasacoutinho/ext-clickhouse.git ../ext-clickhouse
+          git clone --branch "$EXT_CLICKHOUSE_REF" --depth=1 https://github.com/lucasacoutinho/ext-clickhouse.git ../ext-clickhouse
           cd ../ext-clickhouse
           git submodule sync --recursive
           for attempt in 1 2 3; do
@@ -276,7 +280,7 @@ jobs:
 
       - name: Checkout native dependency
         run: |
-          git clone --depth=1 https://github.com/lucasacoutinho/ext-clickhouse.git ../ext-clickhouse
+          git clone --branch "$EXT_CLICKHOUSE_REF" --depth=1 https://github.com/lucasacoutinho/ext-clickhouse.git ../ext-clickhouse
           cd ../ext-clickhouse
           git submodule sync --recursive
           for attempt in 1 2 3; do

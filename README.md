@@ -64,10 +64,11 @@ the same C++ types at runtime. The minor release lines must match.
 
 | `pdo_clickhouse` | `ext-clickhouse` |
 | --- | --- |
+| 1.4.x | 1.4.x |
 | 1.3.x | 1.3.x |
 | 1.2.x | 1.2.x |
 
-Composer enforces the 1.3.x pairing for the current release. Published Docker
+Composer enforces the 1.4.x pairing for the current release. Published Docker
 images also pin the matching native extension tag and verify its runtime API
 before they build PDO.
 
@@ -140,7 +141,7 @@ make install
 Versioned and rolling images are published for each supported PHP release:
 
 ```bash
-docker pull ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-v1.3.0
+docker pull ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-v1.4.0
 docker pull ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-latest
 ```
 
