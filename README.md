@@ -101,6 +101,13 @@ $pdo->exec(
 $pdo->exec("INSERT INTO test VALUES (1, 'Alice'), (2, 'Bob')");
 ```
 
+### Transactions
+
+ClickHouse does not provide the transaction semantics expected by PDO. The
+driver therefore rejects `beginTransaction()`, `commit()`, and `rollBack()`
+instead of reporting success for operations that cannot make writes atomic or
+revert them. Writes are executed immediately.
+
 ## TLS
 
 TLS settings are part of the DSN. Boolean options accept `1`, `0`, `true`,

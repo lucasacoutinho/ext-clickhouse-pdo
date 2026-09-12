@@ -55,13 +55,32 @@ $bools = [
 ];
 echo implode('', $bools), "\n";
 
-// ClickHouse has no transactions, but PDO callers commonly expect these
-// methods to be harmless compatibility no-ops.
+// Transaction methods must fail closed: writes are executed immediately and
+// cannot be rolled back by ClickHouse.
 var_dump($pdo->inTransaction());
-var_dump($pdo->beginTransaction());
+try {
+    $pdo->beginTransaction();
+    echo "FAIL: transaction reported success\n";
+} catch (PDOException $e) {
+    var_dump($pdo->errorCode());
+}
 var_dump($pdo->inTransaction());
-var_dump($pdo->commit());
-var_dump($pdo->inTransaction());
+
+foreach ([PDO::ERRMODE_SILENT, PDO::ERRMODE_WARNING, PDO::ERRMODE_EXCEPTION] as $mode) {
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, $mode);
+    foreach (['beginTransaction', 'commit', 'rollBack'] as $method) {
+        set_error_handler(function () { return true; });
+        try {
+            $rejected = $pdo->$method() === false;
+        } catch (PDOException $e) {
+            $rejected = true;
+        } finally {
+            restore_error_handler();
+        }
+        var_dump($rejected && !$pdo->inTransaction()
+            && (int) $pdo->query('SELECT 42')->fetchColumn() === 42);
+    }
+}
 
 // ssl=on/yes/True must enable TLS rather than silently falling back to
 // plaintext. The default test server listens without TLS on port 9000, so a
@@ -89,9 +108,16 @@ bool(true)
 string(%d) "'it\'s a test'"
 000
 bool(false)
-bool(true)
-bool(true)
-bool(true)
+string(5) "IM001"
 bool(false)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
 ssl=on rejected non-TLS endpoint
 OK

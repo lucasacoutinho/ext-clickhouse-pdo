@@ -63,7 +63,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php-version: ['7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5']
+        include:
+          - php-version: '7.4'
+            sanitizer: ubsan
+          - php-version: '8.0'
+            sanitizer: ubsan
+          - php-version: '8.1'
+            sanitizer: asan
+          - php-version: '8.2'
+            sanitizer: asan
+          - php-version: '8.3'
+            sanitizer: asan
+          - php-version: '8.4'
+            sanitizer: asan
+          - php-version: '8.5'
+            sanitizer: asan
 
     services:
       clickhouse:
@@ -93,69 +107,33 @@ jobs:
           done
           git submodule update --init --force --depth=1 --recursive
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build sanitizer PHP and PDO image
+        uses: docker/build-push-action@v7
         with:
-          php-version: ${{ matrix.php-version }}
-          tools: phpize
-          extensions: pdo
-          coverage: none
+          context: .
+          file: tools/ci/Dockerfile.sanitizer
+          build-contexts: |
+            native=../ext-clickhouse
+          load: true
+          build-args: |
+            PHP_VERSION=${{ matrix.php-version }}
+            SANITIZER=${{ matrix.sanitizer }}
+          cache-from: type=gha,scope=pdo-transactions-sanitizer-${{ matrix.php-version }}
+          cache-to: type=gha,mode=max,scope=pdo-transactions-sanitizer-${{ matrix.php-version }}
+          tags: clickhouse-pdo-sanitizer:${{ matrix.php-version }}
 
-      - name: Build native dependency with sanitizers
-        run: |
-          cd ../ext-clickhouse
-          phpize
-          if [ "${{ matrix.php-version }}" = "7.4" ] || [ "${{ matrix.php-version }}" = "8.0" ]; then
-            sanitizer_flags="-fsanitize=undefined -fno-omit-frame-pointer -O1 -g"
-            sanitizer_ldflags="-fsanitize=undefined"
-          else
-            sanitizer_flags="-fsanitize=address,undefined -fno-omit-frame-pointer -O1 -g"
-            sanitizer_ldflags="-fsanitize=address,undefined"
-          fi
-          CFLAGS="$sanitizer_flags" \
-          CXXFLAGS="$sanitizer_flags" \
-          LDFLAGS="$sanitizer_ldflags" \
-            ./configure --enable-clickhouse
-          make -j"$(nproc)"
-          sudo make install
-
-      - name: Build and test PDO driver with sanitizers
+      - name: Run sanitizer tests
         env:
           CLICKHOUSE_HOST: 127.0.0.1
           CLICKHOUSE_PORT: '9000'
         run: |
-          phpize
-          if [ "${{ matrix.php-version }}" = "7.4" ] || [ "${{ matrix.php-version }}" = "8.0" ]; then
-            sanitizer_flags="-fsanitize=undefined -fno-omit-frame-pointer -O1 -g"
-            sanitizer_ldflags="-fsanitize=undefined"
-          else
-            sanitizer_flags="-fsanitize=address,undefined -fno-omit-frame-pointer -O1 -g"
-            sanitizer_ldflags="-fsanitize=address,undefined"
-          fi
-          CFLAGS="$sanitizer_flags" \
-          CXXFLAGS="$sanitizer_flags" \
-          LDFLAGS="$sanitizer_ldflags" \
-            ./configure --enable-pdo-clickhouse
-          make -j"$(nproc)"
-          pdo_args=()
-          if ! php -n -m | grep -q '^PDO$'; then
-            pdo_args=(-d extension=pdo)
-          fi
-          run_env=(
-            USE_ZEND_ALLOC=0
-            UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1"
-            TEST_PHP_EXECUTABLE="$(command -v php)"
-          )
-          if [ "${{ matrix.php-version }}" != "7.4" ] && [ "${{ matrix.php-version }}" != "8.0" ]; then
-            asan_lib="$(cc -print-file-name=libasan.so)"
-            cxx_lib="$(c++ -print-file-name=libstdc++.so)"
-            run_env+=(
-              LD_PRELOAD="$asan_lib:$cxx_lib"
-              ASAN_OPTIONS="detect_leaks=0:abort_on_error=1"
-            )
-          fi
-          env "${run_env[@]}" timeout 180s php -n run-tests.php -n "${pdo_args[@]}" \
-            -d extension=clickhouse -d extension=modules/pdo_clickhouse.so --show-diff -q tests/*.phpt
+          timeout 180s docker run --rm --network host \
+            -e CLICKHOUSE_HOST \
+            -e CLICKHOUSE_PORT \
+            "clickhouse-pdo-sanitizer:${{ matrix.php-version }}"
 
   coverage:
     runs-on: ubuntu-latest
