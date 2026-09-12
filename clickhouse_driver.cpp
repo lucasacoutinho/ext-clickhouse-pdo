@@ -362,10 +362,8 @@ static int clickhouse_handle_begin(pdo_dbh_t *dbh)
 static bool clickhouse_handle_begin(pdo_dbh_t *dbh)
 #endif
 {
-    auto *H = static_cast<pdo_clickhouse_db_handle *>(dbh->driver_data);
-    H->transaction_open = true;
-    pdo_clickhouse_clear_error(dbh, nullptr);
-    return true;
+    pdo_clickhouse_error(dbh, nullptr, -1, "ClickHouse does not support transactions", "IM001");
+    return false;
 }
 
 #if PHP_VERSION_ID < 80100
@@ -374,10 +372,8 @@ static int clickhouse_handle_commit(pdo_dbh_t *dbh)
 static bool clickhouse_handle_commit(pdo_dbh_t *dbh)
 #endif
 {
-    auto *H = static_cast<pdo_clickhouse_db_handle *>(dbh->driver_data);
-    H->transaction_open = false;
-    pdo_clickhouse_clear_error(dbh, nullptr);
-    return true;
+    pdo_clickhouse_error(dbh, nullptr, -1, "ClickHouse does not support transactions", "IM001");
+    return false;
 }
 
 #if PHP_VERSION_ID < 80100
@@ -386,10 +382,8 @@ static int clickhouse_handle_rollback(pdo_dbh_t *dbh)
 static bool clickhouse_handle_rollback(pdo_dbh_t *dbh)
 #endif
 {
-    auto *H = static_cast<pdo_clickhouse_db_handle *>(dbh->driver_data);
-    H->transaction_open = false;
-    pdo_clickhouse_clear_error(dbh, nullptr);
-    return true;
+    pdo_clickhouse_error(dbh, nullptr, -1, "ClickHouse does not support transactions", "IM001");
+    return false;
 }
 
 #if PHP_VERSION_ID < 80100
@@ -398,8 +392,7 @@ static int clickhouse_handle_in_transaction(pdo_dbh_t *dbh)
 static bool clickhouse_handle_in_transaction(pdo_dbh_t *dbh)
 #endif
 {
-    auto *H = static_cast<pdo_clickhouse_db_handle *>(dbh->driver_data);
-    return H && H->transaction_open;
+    return false;
 }
 
 #if PHP_VERSION_ID < 80100
@@ -560,7 +553,6 @@ static int pdo_clickhouse_handle_factory(pdo_dbh_t *dbh, zval *driver_options)
     new (&H->options) std::unique_ptr<clickhouse::ClientOptions>();
     new (&H->errmsg) std::string();
     H->ssl_enabled = false;
-    H->transaction_open = false;
     H->errcode = 0;
 
     dbh->driver_data = H;

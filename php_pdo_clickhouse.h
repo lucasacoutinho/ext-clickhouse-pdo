@@ -38,7 +38,6 @@ struct pdo_clickhouse_db_handle
 
     /* Connection state */
     bool ssl_enabled;
-    bool transaction_open;
 
     /* Error state */
     int errcode;

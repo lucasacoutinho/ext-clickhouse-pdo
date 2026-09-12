@@ -55,12 +55,15 @@ $bools = [
 ];
 echo implode('', $bools), "\n";
 
-// ClickHouse has no transactions, but PDO callers commonly expect these
-// methods to be harmless compatibility no-ops.
+// Transaction methods must fail closed: writes are executed immediately and
+// cannot be rolled back by ClickHouse.
 var_dump($pdo->inTransaction());
-var_dump($pdo->beginTransaction());
-var_dump($pdo->inTransaction());
-var_dump($pdo->commit());
+try {
+    $pdo->beginTransaction();
+    echo "FAIL: transaction reported success\n";
+} catch (PDOException $e) {
+    var_dump($pdo->errorCode());
+}
 var_dump($pdo->inTransaction());
 
 // ssl=on/yes/True must enable TLS rather than silently falling back to
@@ -89,9 +92,7 @@ bool(true)
 string(%d) "'it\'s a test'"
 000
 bool(false)
-bool(true)
-bool(true)
-bool(true)
+string(5) "IM001"
 bool(false)
 ssl=on rejected non-TLS endpoint
 OK
