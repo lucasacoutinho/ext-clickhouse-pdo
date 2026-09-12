@@ -3,13 +3,17 @@ ARG PHP_VERSION=8.5
 # --- Stage 1: Build ---
 FROM php:${PHP_VERSION}-cli AS builder
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN . /etc/os-release \
+    && if [ "$VERSION_CODENAME" = "bullseye" ]; then \
+        sed -i 's|deb http://deb.debian.org/debian-security|deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20260831T000000Z/|g' /etc/apt/sources.list; \
+    fi \
+    && apt-get update && apt-get install -y --no-install-recommends \
     autoconf g++ make git libssl-dev pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 ARG EXT_CLICKHOUSE_REPOSITORY=https://github.com/lucasacoutinho/ext-clickhouse.git
-ARG EXT_CLICKHOUSE_REF=v1.4.0
+ARG EXT_CLICKHOUSE_REF=v1.4.1
 COPY tools/verify-native-runtime.php /build/verify-native-runtime.php
 
 # Build ext-clickhouse first (pdo_clickhouse depends on it)
