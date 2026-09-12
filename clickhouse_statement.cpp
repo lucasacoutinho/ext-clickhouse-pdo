@@ -8,6 +8,7 @@
 #include <cctype>
 #include <cstring>
 #include <string>
+#include <stdexcept>
 
 struct clickhouse_bound_param_state
 {
@@ -266,8 +267,12 @@ static int clickhouse_stmt_execute(pdo_stmt_t *stmt)
                 if (block.GetRowCount() == 0)
                     return;
 
-                size_t block_idx = S->blocks.size();
                 size_t rows = block.GetRowCount();
+                if (rows > H->max_buffered_rows || S->total_rows > H->max_buffered_rows - rows) {
+                    throw std::runtime_error(
+                        "ClickHouse result exceeds max_buffered_rows; restrict the query or "
+                        "raise the DSN limit");
+                }
                 S->block_row_offsets.push_back(S->total_rows);
                 S->total_rows += rows;
 

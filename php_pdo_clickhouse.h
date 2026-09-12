@@ -38,6 +38,7 @@ struct pdo_clickhouse_db_handle
 
     /* Connection state */
     bool ssl_enabled;
+    size_t max_buffered_rows;
 
     /* Error state */
     int errcode;

@@ -47,6 +47,13 @@ $rows = $pdo
 The driver uses ClickHouse's native TCP port, usually `9000`. It does not use
 the HTTP interface.
 
+SELECT results are buffered because PDO fetches rows after query execution.
+To prevent an unexpectedly large result from exhausting the PHP worker, the
+driver rejects results above 1,000,000 rows by default. Trusted applications
+that require a different ceiling can set `max_buffered_rows` in the DSN, for
+example `clickhouse:host=127.0.0.1;max_buffered_rows=10000`. The value must be a
+positive integer; queries should still select only the data they need.
+
 ## Requirements
 
 | Component | Supported version |
