@@ -1,12 +1,10 @@
 #include "php_pdo_clickhouse.h"
 
 #include <algorithm>
-#include <cerrno>
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
 #include <chrono>
-#include <limits>
 #include <string>
 #include <new>
 #include <vector>
@@ -50,20 +48,25 @@ static bool clickhouse_parse_dsn_bool(const char *src, bool *out)
 
 static bool clickhouse_parse_positive_size(const char *src, size_t *out)
 {
-    if (!src || !*src || *src == '-') {
+    if (!src || !*src) {
         return false;
     }
 
-    char *end = nullptr;
-    errno = 0;
-    unsigned long long value = strtoull(src, &end, 10);
-    if (errno == ERANGE || !end || *end != '\0' || value == 0 ||
-        value > std::numeric_limits<size_t>::max()) {
-        return false;
+    size_t value = 0;
+    const size_t maximum = static_cast<size_t>(ZEND_LONG_MAX);
+    for (const char *digit = src; *digit; ++digit) {
+        if (*digit < '0' || *digit > '9') {
+            return false;
+        }
+        const size_t number = static_cast<size_t>(*digit - '0');
+        if (value > (maximum - number) / 10) {
+            return false;
+        }
+        value = value * 10 + number;
     }
 
-    *out = static_cast<size_t>(value);
-    return true;
+    *out = value;
+    return value != 0;
 }
 
 static bool clickhouse_is_zero_number_string(const std::string &value)
@@ -552,7 +555,8 @@ static int pdo_clickhouse_handle_factory(pdo_dbh_t *dbh, zval *driver_options)
         {"ca_file", NULL, 0},
         {"client_cert", NULL, 0},
         {"client_key", NULL, 0},
-        {"max_buffered_rows", NULL, 0},
+        {"max_buffered_rows", nullptr, 0},
+        {"max_buffered_bytes", nullptr, 0},
     };
 
     php_pdo_parse_data_source(dbh->data_source, dbh->data_source_len, parsed,
@@ -569,6 +573,7 @@ static int pdo_clickhouse_handle_factory(pdo_dbh_t *dbh, zval *driver_options)
     const char *client_cert_str = parsed[8].optval ? parsed[8].optval : nullptr;
     const char *client_key_str = parsed[9].optval ? parsed[9].optval : nullptr;
     const char *max_buffered_rows_str = parsed[10].optval ? parsed[10].optval : nullptr;
+    const char *max_buffered_bytes_str = parsed[11].optval ? parsed[11].optval : nullptr;
     const char *user = dbh->username ? dbh->username : "default";
     const char *pass = dbh->password ? dbh->password : "";
 
@@ -582,6 +587,7 @@ static int pdo_clickhouse_handle_factory(pdo_dbh_t *dbh, zval *driver_options)
     new (&H->errmsg) std::string();
     H->ssl_enabled = false;
     H->max_buffered_rows = 1000000;
+    H->max_buffered_bytes = size_t{64} * 1024 * 1024;
     H->errcode = 0;
 
     dbh->driver_data = H;
@@ -600,6 +606,13 @@ static int pdo_clickhouse_handle_factory(pdo_dbh_t *dbh, zval *driver_options)
         !clickhouse_parse_positive_size(max_buffered_rows_str, &H->max_buffered_rows)) {
         pdo_clickhouse_error(dbh, nullptr, -1, "Invalid ClickHouse max_buffered_rows option in DSN",
                              "08001");
+        goto cleanup;
+    }
+
+    if (max_buffered_bytes_str &&
+        !clickhouse_parse_positive_size(max_buffered_bytes_str, &H->max_buffered_bytes)) {
+        pdo_clickhouse_error(dbh, nullptr, -1,
+                             "Invalid ClickHouse max_buffered_bytes option in DSN", "08001");
         goto cleanup;
     }
 

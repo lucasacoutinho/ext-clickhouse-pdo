@@ -11,7 +11,7 @@ extern "C" {
 #include "ext/pdo/php_pdo_driver.h"
 }
 
-#define PHP_PDO_CLICKHOUSE_VERSION "1.4.1"
+#define PHP_PDO_CLICKHOUSE_VERSION "1.5.0"
 
 #if PHP_VERSION_ID < 80000
 typedef int zend_result;
@@ -39,6 +39,7 @@ struct pdo_clickhouse_db_handle
     /* Connection state */
     bool ssl_enabled;
     size_t max_buffered_rows;
+    size_t max_buffered_bytes;
 
     /* Error state */
     int errcode;

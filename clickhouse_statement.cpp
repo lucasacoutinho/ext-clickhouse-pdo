@@ -2,13 +2,127 @@
 
 /* ext-clickhouse type conversion functions */
 #include "src/column_convert.h"
+#include "clickhouse/base/output.h"
+#include "clickhouse/columns/array.h"
+#include "clickhouse/columns/map.h"
+#include "clickhouse/columns/nullable.h"
+#include "clickhouse/columns/tuple.h"
 
 #include <new>
 #include <algorithm>
 #include <cctype>
 #include <cstring>
 #include <string>
-#include <stdexcept>
+
+class clickhouse_result_budget final : public clickhouse::OutputStream
+{
+  public:
+    explicit clickhouse_result_budget(size_t limit) : remaining_(limit) {}
+
+    bool consume(size_t bytes)
+    {
+        if (exceeded_ || bytes > remaining_) {
+            exceeded_ = true;
+            return false;
+        }
+        remaining_ -= bytes;
+        return true;
+    }
+
+    bool exceeded() const
+    {
+        return exceeded_;
+    }
+
+    void consume_column(const clickhouse::ColumnRef &column)
+    {
+        column->SavePrefix(this);
+        consume_body(column);
+    }
+
+  protected:
+    size_t DoWrite(const void *, size_t bytes) override
+    {
+        consume(bytes);
+        return bytes;
+    }
+
+  private:
+    static bool contains_nothing(const clickhouse::TypeRef &type)
+    {
+        using namespace clickhouse;
+        switch (type->GetCode()) {
+        case Type::Void:
+            return true;
+        case Type::Nullable:
+            return contains_nothing(type->As<NullableType>()->GetNestedType());
+        case Type::Array:
+            return contains_nothing(type->As<ArrayType>()->GetItemType());
+        case Type::Tuple:
+            for (const auto &item : type->As<TupleType>()->GetTupleType()) {
+                if (contains_nothing(item)) {
+                    return true;
+                }
+            }
+            return false;
+        case Type::Map:
+            return contains_nothing(type->As<MapType>()->GetKeyType()) ||
+                   contains_nothing(type->As<MapType>()->GetValueType());
+        default:
+            return false;
+        }
+    }
+
+    void consume_body(const clickhouse::ColumnRef &column)
+    {
+        using namespace clickhouse;
+        if (exceeded_) {
+            return;
+        }
+        switch (column->Type()->GetCode()) {
+        case Type::Void:
+            // Nothing reads one byte per row, but upstream does not implement SaveBody.
+            consume(column->Size());
+            break;
+        case Type::Nullable: {
+            const auto nullable = column->As<ColumnNullable>();
+            nullable->Nulls()->SaveBody(this);
+            consume_body(nullable->Nested());
+            break;
+        }
+        case Type::Array: {
+            const auto array = column->As<ColumnArray>();
+            array->GetOffsets()->SaveBody(this);
+            consume_body(array->GetData());
+            break;
+        }
+        case Type::Tuple: {
+            const auto tuple = column->As<ColumnTuple>();
+            for (size_t i = 0; i < tuple->TupleSize() && !exceeded_; ++i) {
+                consume_body((*tuple)[i]);
+            }
+            break;
+        }
+        case Type::Map:
+            if (contains_nothing(column->Type())) {
+                const auto map = column->As<ColumnMap>();
+                for (size_t row = 0; row < map->Size() && !exceeded_; ++row) {
+                    if (consume(sizeof(uint64_t))) {
+                        consume_body(map->GetAsColumn(row));
+                    }
+                }
+                break;
+            }
+            [[fallthrough]];
+        default:
+            column->SaveBody(this);
+            break;
+        }
+    }
+
+    size_t remaining_;
+    bool exceeded_ = false;
+};
 
 struct clickhouse_bound_param_state
 {
@@ -125,6 +239,21 @@ static void clickhouse_stmt_set_column_count(pdo_stmt_t *stmt, int column_count)
 #endif
 }
 
+static void clickhouse_stmt_clear_results(pdo_stmt_t *stmt)
+{
+    auto *S = static_cast<pdo_clickhouse_stmt *>(stmt->driver_data);
+    S->blocks.clear();
+    S->col_names.clear();
+    S->col_type_names.clear();
+    S->block_row_offsets.clear();
+    S->total_rows = 0;
+    S->current_row = 0;
+    S->affected_rows = 0;
+    S->executed = false;
+    stmt->row_count = 0;
+    clickhouse_stmt_set_column_count(stmt, 0);
+}
+
 static size_t clickhouse_skip_sql_trivia(const std::string &sql, size_t pos)
 {
     while (pos < sql.size()) {
@@ -220,15 +349,7 @@ static int clickhouse_stmt_execute(pdo_stmt_t *stmt)
     auto *S = static_cast<pdo_clickhouse_stmt *>(stmt->driver_data);
     auto *H = S->H;
 
-    /* Clear previous results */
-    S->blocks.clear();
-    S->col_names.clear();
-    S->col_type_names.clear();
-    S->block_row_offsets.clear();
-    S->total_rows = 0;
-    S->current_row = 0;
-    S->affected_rows = 0;
-    S->executed = true;
+    clickhouse_stmt_clear_results(stmt);
     pdo_clickhouse_clear_error(stmt->dbh, stmt);
 
     /* Use the active query string (PDO may have rewritten placeholders) */
@@ -246,32 +367,49 @@ static int clickhouse_stmt_execute(pdo_stmt_t *stmt)
     std::string query_str(sql, sql_len);
 
     bool is_select = clickhouse_query_returns_rows(query_str);
+    const char *limit_error = nullptr;
 
     try {
         if (is_select) {
             /* SELECT: buffer all blocks */
             bool schema_recorded = false;
+            clickhouse_result_budget budget(H->max_buffered_bytes);
 
             clickhouse::Query q(query_str);
-            q.OnData([&](const clickhouse::Block &block) {
+            q.OnDataCancelable([&](const clickhouse::Block &block) {
+                if (limit_error) {
+                    return false;
+                }
                 if (!schema_recorded && block.GetColumnCount() > 0) {
                     schema_recorded = true;
                     for (size_t c = 0; c < block.GetColumnCount(); ++c) {
+                        const auto type_name = block[c]->Type()->GetName();
+                        if (!budget.consume(block.GetColumnName(c).size()) ||
+                            !budget.consume(type_name.size())) {
+                            limit_error = "ClickHouse result exceeds max_buffered_bytes";
+                            return false;
+                        }
                         S->col_names.push_back(block.GetColumnName(c));
-                        S->col_type_names.push_back(block[c]->Type()->GetName());
+                        S->col_type_names.push_back(type_name);
                     }
                     clickhouse_stmt_set_column_count(stmt,
                                                      static_cast<int>(block.GetColumnCount()));
                 }
 
                 if (block.GetRowCount() == 0)
-                    return;
+                    return true;
 
                 size_t rows = block.GetRowCount();
                 if (rows > H->max_buffered_rows || S->total_rows > H->max_buffered_rows - rows) {
-                    throw std::runtime_error(
-                        "ClickHouse result exceeds max_buffered_rows; restrict the query or "
-                        "raise the DSN limit");
+                    limit_error = "ClickHouse result exceeds max_buffered_rows";
+                    return false;
+                }
+                for (size_t c = 0; c < block.GetColumnCount(); ++c) {
+                    budget.consume_column(block[c]);
+                    if (budget.exceeded()) {
+                        limit_error = "ClickHouse result exceeds max_buffered_bytes";
+                        return false;
+                    }
                 }
                 S->block_row_offsets.push_back(S->total_rows);
                 S->total_rows += rows;
@@ -281,9 +419,15 @@ static int clickhouse_stmt_execute(pdo_stmt_t *stmt)
                     stored.AppendColumn(block.GetColumnName(c), block[c]);
                 }
                 S->blocks.push_back(std::move(stored));
+                return true;
             });
 
             H->client->Execute(q);
+            if (limit_error) {
+                clickhouse_stmt_clear_results(stmt);
+                pdo_clickhouse_error(stmt->dbh, stmt, -1, limit_error, "HY000");
+                return 0;
+            }
 
             if (!schema_recorded) {
                 clickhouse_stmt_set_column_count(stmt, 0);
@@ -304,13 +448,17 @@ static int clickhouse_stmt_execute(pdo_stmt_t *stmt)
             pdo_clickhouse_clear_error(stmt->dbh, stmt);
         }
 
+        S->executed = true;
         return 1;
 
     } catch (const clickhouse::ServerException &e) {
-        pdo_clickhouse_error(stmt->dbh, stmt, e.GetCode(), e.what(), "HY000");
+        clickhouse_stmt_clear_results(stmt);
+        pdo_clickhouse_error(stmt->dbh, stmt, limit_error ? -1 : e.GetCode(),
+                             limit_error ? limit_error : e.what(), "HY000");
         return 0;
     } catch (const std::exception &e) {
-        pdo_clickhouse_error(stmt->dbh, stmt, -1, e.what(), "HY000");
+        clickhouse_stmt_clear_results(stmt);
+        pdo_clickhouse_error(stmt->dbh, stmt, -1, limit_error ? limit_error : e.what(), "HY000");
         return 0;
     }
 }
