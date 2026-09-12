@@ -66,6 +66,22 @@ try {
 }
 var_dump($pdo->inTransaction());
 
+foreach ([PDO::ERRMODE_SILENT, PDO::ERRMODE_WARNING, PDO::ERRMODE_EXCEPTION] as $mode) {
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, $mode);
+    foreach (['beginTransaction', 'commit', 'rollBack'] as $method) {
+        set_error_handler(function () { return true; });
+        try {
+            $rejected = $pdo->$method() === false;
+        } catch (PDOException $e) {
+            $rejected = true;
+        } finally {
+            restore_error_handler();
+        }
+        var_dump($rejected && !$pdo->inTransaction()
+            && (int) $pdo->query('SELECT 42')->fetchColumn() === 42);
+    }
+}
+
 // ssl=on/yes/True must enable TLS rather than silently falling back to
 // plaintext. The default test server listens without TLS on port 9000, so a
 // TLS connection should fail here.
@@ -94,5 +110,14 @@ string(%d) "'it\'s a test'"
 bool(false)
 string(5) "IM001"
 bool(false)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
 ssl=on rejected non-TLS endpoint
 OK
