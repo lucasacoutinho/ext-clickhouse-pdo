@@ -34,7 +34,7 @@ if test "$PHP_PDO_CLICKHOUSE" != "no"; then
   PHP_REQUIRE_CXX()
   PHP_CXX_COMPILE_STDCXX([17], [mandatory], [PHP_PDO_CLICKHOUSE_STDCXX])
 
-  dnl Match the C++ API options used by the paired ext-clickhouse 1.4.x release.
+  dnl Match the C++ API options used by the paired ext-clickhouse 1.6.x release.
   PDO_CLICKHOUSE_API_FLAGS="-DCH_USE_ABSEIL_FOR_BIGNUM=1 -DCH_MAP_BOOL_TO_UINT8=0 -DCH_NON_OPTIONAL_CURRENT_ENDPOINT=0"
 
   dnl Detect OpenSSL (must match ext-clickhouse build)
