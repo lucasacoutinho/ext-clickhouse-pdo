@@ -13,7 +13,7 @@ RUN . /etc/os-release \
 
 WORKDIR /build
 ARG EXT_CLICKHOUSE_REPOSITORY=https://github.com/lucasacoutinho/ext-clickhouse.git
-ARG EXT_CLICKHOUSE_REF=v1.5.0
+ARG EXT_CLICKHOUSE_REF=v1.6.0
 COPY tools/verify-native-runtime.php /build/verify-native-runtime.php
 
 # Build ext-clickhouse first (pdo_clickhouse depends on it)
