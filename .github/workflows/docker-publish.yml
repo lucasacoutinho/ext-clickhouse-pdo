@@ -6,7 +6,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  EXT_CLICKHOUSE_REF: v1.6.1
+  EXT_CLICKHOUSE_REF: v1.6.2
 
 jobs:
   publish:
