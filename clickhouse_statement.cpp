@@ -250,9 +250,9 @@ static void clickhouse_stmt_clear_results(pdo_stmt_t *stmt)
     S->blocks.clear();
     S->col_names.clear();
     S->col_type_names.clear();
-    S->block_row_offsets.clear();
     S->total_rows = 0;
-    S->current_row = 0;
+    S->current_block = 0;
+    S->rows_fetched_in_block = 0;
     S->affected_rows = 0;
     S->executed = false;
     stmt->row_count = 0;
@@ -336,12 +336,9 @@ static int clickhouse_stmt_dtor(pdo_stmt_t *stmt)
 {
     auto *S = static_cast<pdo_clickhouse_stmt *>(stmt->driver_data);
     if (S) {
-        S->query.~basic_string();
-        S->rewritten_query.~basic_string();
         S->blocks.~vector();
         S->col_names.~vector();
         S->col_type_names.~vector();
-        S->block_row_offsets.~vector();
         S->errmsg.~basic_string();
         efree(S);
         stmt->driver_data = nullptr;
@@ -409,20 +406,17 @@ static int clickhouse_stmt_execute(pdo_stmt_t *stmt)
                     limit_error = "ClickHouse result exceeds max_buffered_rows";
                     return false;
                 }
+                pdo_clickhouse_result_block stored{rows, {}};
+                stored.columns.reserve(block.GetColumnCount());
                 for (size_t c = 0; c < block.GetColumnCount(); ++c) {
-                    budget.consume_column(block[c]);
+                    stored.columns.push_back(block[c]);
+                    budget.consume_column(stored.columns.back());
                     if (budget.exceeded()) {
                         limit_error = "ClickHouse result exceeds max_buffered_bytes";
                         return false;
                     }
                 }
-                S->block_row_offsets.push_back(S->total_rows);
                 S->total_rows += rows;
-
-                clickhouse::Block stored;
-                for (size_t c = 0; c < block.GetColumnCount(); ++c) {
-                    stored.AppendColumn(block.GetColumnName(c), block[c]);
-                }
                 S->blocks.push_back(std::move(stored));
                 return true;
             });
@@ -472,12 +466,17 @@ static int clickhouse_stmt_fetch(pdo_stmt_t *stmt, enum pdo_fetch_orientation or
 {
     auto *S = static_cast<pdo_clickhouse_stmt *>(stmt->driver_data);
 
-    if (ori != PDO_FETCH_ORI_NEXT)
-        return 0;
-    if (S->current_row >= S->total_rows)
+    if (ori != PDO_FETCH_ORI_NEXT || S->current_block >= S->blocks.size())
         return 0;
 
-    S->current_row++;
+    if (S->rows_fetched_in_block == S->blocks[S->current_block].rows) {
+        ++S->current_block;
+        S->rows_fetched_in_block = 0;
+        if (S->current_block == S->blocks.size())
+            return 0;
+    }
+
+    ++S->rows_fetched_in_block;
     return 1;
 }
 
@@ -503,22 +502,16 @@ static int clickhouse_stmt_read_col_zval(pdo_stmt_t *stmt, int colno, zval *resu
 {
     auto *S = static_cast<pdo_clickhouse_stmt *>(stmt->driver_data);
 
-    size_t row_idx = S->current_row - 1;
-    if (row_idx >= S->total_rows || colno < 0)
+    if (S->rows_fetched_in_block == 0 || colno < 0)
         return 0;
 
-    auto it = std::upper_bound(S->block_row_offsets.begin(), S->block_row_offsets.end(), row_idx);
-    if (it == S->block_row_offsets.begin())
+    const auto &block = S->blocks[S->current_block];
+
+    if (static_cast<size_t>(colno) >= block.columns.size())
         return 0;
 
-    size_t block_idx = static_cast<size_t>(std::distance(S->block_row_offsets.begin(), it - 1));
-    size_t block_row = row_idx - S->block_row_offsets[block_idx];
-    const auto &block = S->blocks[block_idx];
-
-    if (static_cast<size_t>(colno) >= block.GetColumnCount())
-        return 0;
-
-    php_clickhouse_column_to_zval(block[static_cast<size_t>(colno)], block_row, result);
+    php_clickhouse_column_to_zval(block.columns[static_cast<size_t>(colno)],
+                                  S->rows_fetched_in_block - 1, result);
     return 1;
 }
 
@@ -652,11 +645,11 @@ static int clickhouse_stmt_cursor_closer(pdo_stmt_t *stmt)
 {
     auto *S = static_cast<pdo_clickhouse_stmt *>(stmt->driver_data);
     S->blocks.clear();
-    S->block_row_offsets.clear();
     S->col_names.clear();
     S->col_type_names.clear();
     S->total_rows = 0;
-    S->current_row = 0;
+    S->current_block = 0;
+    S->rows_fetched_in_block = 0;
     return 1;
 }
 

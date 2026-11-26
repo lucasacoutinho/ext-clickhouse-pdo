@@ -11,7 +11,7 @@ extern "C" {
 #include "ext/pdo/php_pdo_driver.h"
 }
 
-#define PHP_PDO_CLICKHOUSE_VERSION "1.6.2"
+#define PHP_PDO_CLICKHOUSE_VERSION "1.6.3"
 
 #if PHP_VERSION_ID < 80000
 typedef int zend_result;
@@ -46,23 +46,24 @@ struct pdo_clickhouse_db_handle
     std::string errmsg;
 };
 
+struct pdo_clickhouse_result_block
+{
+    size_t rows;
+    std::vector<clickhouse::ColumnRef> columns;
+};
+
 /* Per-statement driver data stored in pdo_stmt_t->driver_data. */
 struct pdo_clickhouse_stmt
 {
     pdo_clickhouse_db_handle *H; /* back-reference to connection */
 
-    std::string query;           /* original SQL */
-    std::string rewritten_query; /* after placeholder rewriting */
-
     /* SELECT results: all blocks collected into rows */
-    std::vector<clickhouse::Block> blocks;
+    std::vector<pdo_clickhouse_result_block> blocks;
     std::vector<std::string> col_names;
     std::vector<std::string> col_type_names;
     size_t total_rows;
-    size_t current_row;
-
-    /* Starting flat row index for each buffered block. */
-    std::vector<size_t> block_row_offsets;
+    size_t current_block;
+    size_t rows_fetched_in_block;
 
     bool executed;
     zend_long affected_rows;

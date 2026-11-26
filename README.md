@@ -7,7 +7,7 @@
   <p>
     <a href="https://github.com/lucasacoutinho/ext-clickhouse-pdo/actions/workflows/ci.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/lucasacoutinho/ext-clickhouse-pdo/ci.yml?branch=main&style=for-the-badge&labelColor=000000"></a>
     <a href="https://packagist.org/packages/lucasacoutinho/ext-clickhouse-pdo"><img alt="Packagist version" src="https://img.shields.io/packagist/v/lucasacoutinho/ext-clickhouse-pdo?style=for-the-badge&labelColor=000000"></a>
-    <a href="#requirements"><img alt="PHP 7.4 through 8.5" src="https://img.shields.io/badge/PHP-7.4%20to%208.5-777BB4?style=for-the-badge&logo=php&logoColor=white&labelColor=000000"></a>
+    <a href="#requirements"><img alt="PHP 7.4 through 8.6" src="https://img.shields.io/badge/PHP-7.4%20to%208.6-777BB4?style=for-the-badge&logo=php&logoColor=white&labelColor=000000"></a>
     <a href="https://github.com/lucasacoutinho/ext-clickhouse-pdo/blob/main/LICENSE"><img alt="MIT license" src="https://img.shields.io/github/license/lucasacoutinho/ext-clickhouse-pdo?style=for-the-badge&labelColor=000000"></a>
   </p>
 </div>
@@ -78,7 +78,7 @@ limits on the upstream protocol decoder.
 
 | Component | Supported version |
 | --- | --- |
-| PHP | 7.4 through 8.5 |
+| PHP | 7.4 through 8.6 |
 | `ext-pdo` | The version bundled with PHP |
 | `ext-clickhouse` | The matching minor release line |
 
@@ -87,7 +87,8 @@ CI builds and tests every supported PHP version.
 ## Native version pairing
 
 `pdo_clickhouse` includes headers installed by `ext-clickhouse` and constructs
-the same C++ types at runtime. The minor release lines must match.
+the same C++ types at runtime. The minor release lines must match. PHP 8.6
+requires 1.6.3 or newer of both extensions.
 
 | `pdo_clickhouse` | `ext-clickhouse` |
 | --- | --- |
@@ -177,8 +178,8 @@ make install
 Versioned and rolling images are published for each supported PHP release:
 
 ```bash
-docker pull ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-v1.6.2
-docker pull ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.5-latest
+docker pull ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.6-v1.6.3
+docker pull ghcr.io/lucasacoutinho/ext-clickhouse-pdo:php8.6-latest
 ```
 
 Each image contains the matching `clickhouse` and `pdo_clickhouse` modules.
