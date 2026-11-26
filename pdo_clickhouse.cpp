@@ -6,6 +6,10 @@ extern "C" {
 
 extern "C" {
 
+#if defined(ZTS) && defined(COMPILE_DL_PDO_CLICKHOUSE)
+ZEND_TSRMLS_CACHE_DEFINE()
+#endif
+
 static const zend_module_dep pdo_clickhouse_deps[] = {
     ZEND_MOD_REQUIRED("pdo") ZEND_MOD_REQUIRED("clickhouse") ZEND_MOD_END};
 
@@ -20,6 +24,14 @@ static PHP_MINIT_FUNCTION(pdo_clickhouse)
 static PHP_MSHUTDOWN_FUNCTION(pdo_clickhouse)
 {
     php_pdo_unregister_driver(&pdo_clickhouse_driver);
+    return SUCCESS;
+}
+
+static PHP_RINIT_FUNCTION(pdo_clickhouse)
+{
+#if defined(ZTS) && defined(COMPILE_DL_PDO_CLICKHOUSE)
+    ZEND_TSRMLS_CACHE_UPDATE();
+#endif
     return SUCCESS;
 }
 
@@ -39,7 +51,7 @@ zend_module_entry pdo_clickhouse_module_entry = {STANDARD_MODULE_HEADER_EX,
                                                  NULL,
                                                  PHP_MINIT(pdo_clickhouse),
                                                  PHP_MSHUTDOWN(pdo_clickhouse),
-                                                 NULL,
+                                                 PHP_RINIT(pdo_clickhouse),
                                                  NULL,
                                                  PHP_MINFO(pdo_clickhouse),
                                                  PHP_PDO_CLICKHOUSE_VERSION,

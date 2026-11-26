@@ -185,25 +185,22 @@ static void clickhouse_handle_closer(pdo_dbh_t *dbh)
 #endif
 }
 
-static bool clickhouse_handle_preparer_impl(pdo_dbh_t *dbh, const char *sql, size_t sql_len,
-                                            pdo_stmt_t *stmt, zval *driver_options)
+static bool clickhouse_handle_preparer_impl(pdo_dbh_t *dbh, pdo_stmt_t *stmt)
 {
     auto *H = static_cast<pdo_clickhouse_db_handle *>(dbh->driver_data);
 
     auto *S = static_cast<pdo_clickhouse_stmt *>(ecalloc(1, sizeof(pdo_clickhouse_stmt)));
 
     /* Placement-new for ALL C++ members */
-    new (&S->query) std::string(sql, sql_len);
-    new (&S->rewritten_query) std::string();
-    new (&S->blocks) std::vector<clickhouse::Block>();
+    new (&S->blocks) std::vector<pdo_clickhouse_result_block>();
     new (&S->col_names) std::vector<std::string>();
     new (&S->col_type_names) std::vector<std::string>();
-    new (&S->block_row_offsets) std::vector<size_t>();
     new (&S->errmsg) std::string();
 
     S->H = H;
     S->total_rows = 0;
-    S->current_row = 0;
+    S->current_block = 0;
+    S->rows_fetched_in_block = 0;
     S->executed = false;
     S->affected_rows = 0;
     S->errcode = 0;
@@ -223,13 +220,13 @@ static bool clickhouse_handle_preparer_impl(pdo_dbh_t *dbh, const char *sql, siz
 static int clickhouse_handle_preparer(pdo_dbh_t *dbh, const char *sql, size_t sql_len,
                                       pdo_stmt_t *stmt, zval *driver_options)
 {
-    return clickhouse_handle_preparer_impl(dbh, sql, sql_len, stmt, driver_options) ? 1 : 0;
+    return clickhouse_handle_preparer_impl(dbh, stmt) ? 1 : 0;
 }
 #else
 static bool clickhouse_handle_preparer(pdo_dbh_t *dbh, zend_string *sql, pdo_stmt_t *stmt,
                                        zval *driver_options)
 {
-    return clickhouse_handle_preparer_impl(dbh, ZSTR_VAL(sql), ZSTR_LEN(sql), stmt, driver_options);
+    return clickhouse_handle_preparer_impl(dbh, stmt);
 }
 #endif
 
